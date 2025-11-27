@@ -18,6 +18,9 @@
         body { font-family: system-ui, -apple-system, sans-serif; }
         @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
         .toast-enter { animation: slideIn 0.3s ease-out forwards; }
+        /* Custom scrollbar for dropdowns */
+        .scroller::-webkit-scrollbar { width: 6px; }
+        .scroller::-webkit-scrollbar-thumb { background-color: #cbd5e1; border-radius: 3px; }
     </style>
 </head>
 <body class="bg-gray-50 text-gray-800">
@@ -29,7 +32,7 @@
         import { 
             Heart, Activity, FileText, Search, Plus, Download, Trash2, Edit, Share2, 
             X, Calendar, ClipboardList, ChevronDown, Wifi, WifiOff, RefreshCw, 
-            Loader2, AlertTriangle, Settings, CheckCircle, Info, Save, Database, Edit2
+            Loader2, AlertTriangle, Settings, CheckCircle, Info, Save, Database, Edit2, Check
         } from 'lucide-react';
         
         import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
@@ -49,10 +52,8 @@
         };
         // ==========================================
 
-        // Constante para estudios inmutables
         const DEFAULT_STUDIES = ['Ecocardiograma', 'Ecocardiograma Doppler', 'ECG'];
 
-        // Verificación Segura de Configuración
         let isConfigured = false;
         try {
             isConfigured = firebaseConfig && firebaseConfig.apiKey && !firebaseConfig.apiKey.includes("TU_API_KEY_AQUI");
@@ -67,36 +68,26 @@
                 auth = getAuth(app);
                 db = getFirestore(app);
             } catch (e) {
-                if (!/already exists/.test(e.message)) {
-                    console.error("Error iniciando Firebase:", e);
-                }
+                if (!/already exists/.test(e.message)) console.error("Error iniciando Firebase:", e);
             }
         }
 
-        // --- Error Boundary ---
         class ErrorBoundary extends Component {
             constructor(props) {
                 super(props);
-                this.state = { hasError: false, error: null, errorInfo: null };
+                this.state = { hasError: false, error: null };
             }
             static getDerivedStateFromError(error) { return { hasError: true, error }; }
-            componentDidCatch(error, errorInfo) { this.setState({ errorInfo }); }
             render() {
                 if (this.state.hasError) {
                     return React.createElement("div", { className: "min-h-screen flex items-center justify-center bg-gray-100 p-4" },
-                        React.createElement("div", { className: "bg-white p-8 rounded-xl shadow-lg max-w-lg w-full" },
-                            React.createElement("h2", { className: "text-2xl font-bold text-red-600 mb-4 flex items-center gap-2" },
-                                React.createElement(AlertTriangle, {size: 28}), "Algo salió mal"
-                            ),
-                            React.createElement("div", { className: "bg-red-50 p-4 rounded-lg mb-6 text-left overflow-auto max-h-40" },
-                                React.createElement("p", { className: "font-mono text-sm text-red-800 break-all" }, 
-                                    this.state.error && this.state.error.toString()
-                                )
-                            ),
+                        React.createElement("div", { className: "bg-white p-8 rounded-xl shadow-lg max-w-lg w-full text-center" },
+                            React.createElement("h2", { className: "text-2xl font-bold text-red-600 mb-2" }, "Algo salió mal"),
+                            React.createElement("p", { className: "text-sm text-gray-600 mb-4" }, this.state.error && this.state.error.toString()),
                             React.createElement("button", { 
                                 onClick: () => { localStorage.clear(); window.location.reload(); },
-                                className: "w-full bg-red-600 text-white px-4 py-3 rounded-lg hover:bg-red-700 font-medium transition-colors"
-                            }, "Borrar datos locales y reiniciar")
+                                className: "bg-red-600 text-white px-4 py-2 rounded hover:bg-red-700"
+                            }, "Reiniciar App")
                         )
                     );
                 }
@@ -104,7 +95,6 @@
             }
         }
 
-        // --- Componentes UI ---
         const Card = ({ children, className = "" }) => React.createElement("div", { className: `bg-white rounded-xl shadow-md border border-gray-100 overflow-hidden ${className}` }, children);
         
         const Button = ({ children, onClick, variant = "primary", className = "", type = "button", disabled = false }) => {
@@ -132,20 +122,20 @@
         const ConfigScreen = () => (
             React.createElement("div", { className: "min-h-screen bg-gray-50 flex items-center justify-center p-4" },
                 React.createElement(Card, { className: "max-w-lg w-full p-8 text-center" },
-                    React.createElement("div", { className: "w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-6" }, React.createElement(Settings, { size: 32, className: "text-blue-600" })),
+                    React.createElement(Settings, { size: 32, className: "text-blue-600 mx-auto mb-4" }),
                     React.createElement("h2", { className: "text-2xl font-bold text-gray-900 mb-2" }, "Configuración Requerida"),
-                    React.createElement("p", { className: "text-gray-600 mb-6" }, "Edita el archivo index.html y coloca tus datos de Firebase."),
-                    React.createElement("a", { href: "https://console.firebase.google.com/", target: "_blank", className: "inline-flex items-center justify-center px-6 py-3 rounded-md text-white bg-blue-600 hover:bg-blue-700 w-full" }, "Ir a Firebase Console")
+                    React.createElement("p", { className: "text-gray-600 mb-6" }, "Edita el archivo index.html con tus datos de Firebase."),
+                    React.createElement("a", { href: "https://console.firebase.google.com/", target: "_blank", className: "inline-block bg-blue-600 text-white px-6 py-2 rounded hover:bg-blue-700" }, "Ir a Firebase Console")
                 )
             )
         );
 
-        // --- App Principal ---
         function CardioApp() {
             if (!isConfigured) return React.createElement(ConfigScreen);
 
             const [user, setUser] = useState(null);
             const [activeTab, setActiveTab] = useState('registro');
+            
             const [patients, setPatients] = useState([]);
             const [diagnosesOptions, setDiagnosesOptions] = useState(['CIA', 'CIV', 'DAP', 'Insuficiencia Cardíaca', 'Estenosis Aórtica', 'Miocardiopatía']);
             const [studiesOptions, setStudiesOptions] = useState(DEFAULT_STUDIES);
@@ -158,7 +148,6 @@
             const [notification, setNotification] = useState(null);
             const [isSubmitting, setIsSubmitting] = useState(false);
             
-            // FORM STATE Actualizado con Unidades de Edad
             const initialFormState = { 
                 id: null, 
                 fecha: new Date().toISOString().split('T')[0], 
@@ -171,10 +160,13 @@
                 notas: '' 
             };
             const [formData, setFormData] = useState(initialFormState);
-            const [newDiagnosis, setNewDiagnosis] = useState('');
-            const [newStudy, setNewStudy] = useState('');
             const [isEditing, setIsEditing] = useState(false);
             
+            // Estados para el buscador de Diagnósticos
+            const [diagSearch, setDiagSearch] = useState('');
+            const [isDiagDropdownOpen, setIsDiagDropdownOpen] = useState(false);
+            const [newStudy, setNewStudy] = useState('');
+
             const [searchTerm, setSearchTerm] = useState('');
             const [dateFilterStart, setDateFilterStart] = useState('');
             const [dateFilterEnd, setDateFilterEnd] = useState('');
@@ -182,7 +174,7 @@
 
             const showToast = (msg, type = 'success') => setNotification({ message: msg, type });
 
-            // 1. Carga Inicial Segura
+            // 1. Carga Inicial
             useEffect(() => {
                 const handleOnline = () => setIsOnline(true);
                 const handleOffline = () => setIsOnline(false);
@@ -196,7 +188,7 @@
                             const parsed = JSON.parse(saved);
                             if (Array.isArray(parsed)) setter(parsed);
                         }
-                    } catch (e) { console.error(`Error cargando ${key}:`, e); }
+                    } catch (e) { console.error(`Error cargando ${key}`, e); }
                 };
 
                 safeLoad('cardio_patients', setPatients, []);
@@ -211,11 +203,7 @@
                 if (auth) {
                     signInAnonymously(auth).catch(e => console.error("Auth Error:", e));
                     const unsub = onAuthStateChanged(auth, setUser);
-                    return () => { 
-                        window.removeEventListener('online', handleOnline); 
-                        window.removeEventListener('offline', handleOffline); 
-                        unsub(); 
-                    };
+                    return () => { window.removeEventListener('online', handleOnline); window.removeEventListener('offline', handleOffline); unsub(); };
                 }
             }, []);
 
@@ -225,25 +213,16 @@
             useEffect(() => { localStorage.setItem('cardio_studies', JSON.stringify(studiesOptions)); }, [studiesOptions]);
             useEffect(() => { localStorage.setItem('cardio_sync_queue', JSON.stringify(pendingSyncs)); }, [pendingSyncs]);
 
-            // 3. Sincronización Firestore
+            // 3. Sincronización
             useEffect(() => {
                 if (!user || !db) return;
-                
                 const rootCollection = 'data_compartida';
                 const workspaceDoc = 'cardiologia';
                 
                 const patientsRef = collection(db, rootCollection, workspaceDoc, 'pacientes');
-                
                 const unsubPatients = onSnapshot(patientsRef, (snap) => {
-                    if (pendingSyncs.length === 0) {
-                        setPatients(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-                    }
-                }, err => {
-                    console.log("Error Snapshot:", err);
-                    if (err.code === 'permission-denied') {
-                        setSyncError("Permiso denegado. Se requieren Reglas de Escritura.");
-                    }
-                });
+                    if (pendingSyncs.length === 0) setPatients(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+                }, err => { if (err.code === 'permission-denied') setSyncError("Permiso denegado."); });
 
                 const settingsRef = doc(db, rootCollection, workspaceDoc, 'configuracion', 'general');
                 const unsubSettings = onSnapshot(settingsRef, (docSnap) => {
@@ -257,128 +236,93 @@
                 return () => { unsubPatients(); unsubSettings(); };
             }, [user, pendingSyncs.length]);
 
-            // 4. Cola de Sincronización
+            // 4. Cola Sync
             useEffect(() => {
                 const process = async () => {
                     if (!isOnline || !user || pendingSyncs.length === 0 || isSyncing) return;
                     setIsSyncing(true);
                     setSyncError(null); 
-                    
                     const item = pendingSyncs[0];
                     const rootCollection = 'data_compartida';
                     const workspaceDoc = 'cardiologia';
-
                     try {
-                        if (item.type === 'save_patient') {
-                            await setDoc(doc(db, rootCollection, workspaceDoc, 'pacientes', item.data.id), item.data);
-                        } else if (item.type === 'delete_patient') {
-                            await deleteDoc(doc(db, rootCollection, workspaceDoc, 'pacientes', item.id));
-                        } else if (item.type === 'save_settings') {
-                            await setDoc(doc(db, rootCollection, workspaceDoc, 'configuracion', 'general'), { 
-                                diagnosticos: item.diagnoses || diagnosesOptions, 
-                                estudios: item.studies || studiesOptions
-                            }, { merge: true });
-                        }
+                        if (item.type === 'save_patient') await setDoc(doc(db, rootCollection, workspaceDoc, 'pacientes', item.data.id), item.data);
+                        else if (item.type === 'delete_patient') await deleteDoc(doc(db, rootCollection, workspaceDoc, 'pacientes', item.id));
+                        else if (item.type === 'save_settings') await setDoc(doc(db, rootCollection, workspaceDoc, 'configuracion', 'general'), { diagnosticos: item.diagnoses || diagnosesOptions, estudios: item.studies || studiesOptions }, { merge: true });
                         setPendingSyncs(p => p.slice(1));
-                    } catch (e) { 
-                        console.error("Sync Error", e); 
-                        let msg = e.message;
-                        if (e.code === 'permission-denied') msg = "Permiso denegado. Habilita permisos en la consola.";
-                        setSyncError(msg);
-                    } 
+                    } catch (e) { console.error("Sync", e); if (e.code === 'permission-denied') setSyncError("Permiso denegado"); } 
                     finally { setIsSyncing(false); }
                 };
                 const int = setInterval(process, 2000);
                 return () => clearInterval(int);
             }, [isOnline, user, pendingSyncs, isSyncing]);
 
-            // Helpers
-            const clearSyncQueue = () => {
-                if(window.confirm("¿Descartar cambios pendientes y limpiar error?")) {
-                    setPendingSyncs([]);
-                    setSyncError(null);
-                }
-            };
+            const clearSyncQueue = () => { if(window.confirm("¿Descartar cambios pendientes?")) { setPendingSyncs([]); setSyncError(null); }};
 
+            // --- SETTINGS LOGIC ---
             const saveSettings = (newDiagnoses, newStudies) => {
                 if (newDiagnoses) setDiagnosesOptions(newDiagnoses);
                 if (newStudies) setStudiesOptions(newStudies);
                 setPendingSyncs(prev => [...prev, { type: 'save_settings', diagnoses: newDiagnoses, studies: newStudies }]);
             };
 
+            // ESTUDIOS
             const addCustomStudy = () => {
                 if (newStudy && !studiesOptions.includes(newStudy)) {
-                    const updated = [...studiesOptions, newStudy];
-                    saveSettings(null, updated);
+                    saveSettings(null, [...studiesOptions, newStudy]);
                     setFormData(prev => ({...prev, estudios: [...prev.estudios, newStudy]}));
                     setNewStudy('');
                 }
             };
-
-            // MODIFICADO: Bloquear borrado de default
-            const removeCustomStudy = (studyToRemove) => {
-                if (DEFAULT_STUDIES.includes(studyToRemove)) {
-                    alert("No se pueden borrar los estudios predeterminados.");
-                    return;
-                }
-                if (confirm(`¿Eliminar "${studyToRemove}"?`)) {
-                    const updated = studiesOptions.filter(s => s !== studyToRemove);
+            const removeCustomStudy = (s) => {
+                if (DEFAULT_STUDIES.includes(s)) return alert("No se puede borrar predeterminados.");
+                if (confirm(`¿Borrar "${s}"?`)) saveSettings(null, studiesOptions.filter(x => x !== s));
+            };
+            const editCustomStudy = (s) => {
+                if (DEFAULT_STUDIES.includes(s)) return;
+                const corrected = prompt(`Editar "${s}" (vacío para borrar):`, s);
+                if (corrected === null) return;
+                if (corrected.trim() === '') return removeCustomStudy(s);
+                if (corrected !== s) {
+                    const updated = studiesOptions.map(x => x === s ? corrected : x);
+                    if (formData.estudios.includes(s)) setFormData(p => ({...p, estudios: p.estudios.map(x => x===s?corrected:x)}));
                     saveSettings(null, updated);
                 }
             };
 
-            // MODIFICADO: Bloquear edición de default
-            const editCustomStudy = (oldStudy) => {
-                if (DEFAULT_STUDIES.includes(oldStudy)) {
-                    // Doble check, aunque el botón debería estar oculto
-                    return;
+            // DIAGNÓSTICOS (Nueva lógica)
+            const addCustomDiagnosis = (diag) => {
+                if (diag && !diagnosesOptions.includes(diag)) {
+                    saveSettings([...diagnosesOptions, diag], null);
+                    setFormData(prev => ({...prev, diagnosticos: [...prev.diagnosticos, diag]}));
                 }
-
-                const corrected = prompt(`Editar nombre del estudio "${oldStudy}" (o dejar vacío para borrar):`, oldStudy);
-                
+            };
+            const removeCustomDiagnosis = (d) => {
+                if (confirm(`¿Borrar diagnóstico "${d}" de la lista global?`)) {
+                    saveSettings(diagnosesOptions.filter(x => x !== d), null);
+                }
+            };
+            const editCustomDiagnosis = (d) => {
+                const corrected = prompt(`Editar "${d}" (vacío para borrar):`, d);
                 if (corrected === null) return;
-
-                if (corrected.trim() === '') {
-                    if (confirm(`¿Eliminar "${oldStudy}" de la lista de estudios disponibles?`)) {
-                        const updatedOptions = studiesOptions.filter(s => s !== oldStudy);
-                        if (formData.estudios.includes(oldStudy)) {
-                            setFormData(prev => ({
-                                ...prev,
-                                estudios: prev.estudios.filter(s => s !== oldStudy)
-                            }));
-                        }
-                        saveSettings(null, updatedOptions);
-                    }
-                    return;
-                }
-
-                if (corrected !== oldStudy) {
-                    const updatedOptions = studiesOptions.map(s => s === oldStudy ? corrected : s);
-                    if (formData.estudios.includes(oldStudy)) {
-                        setFormData(prev => ({
-                            ...prev,
-                            estudios: prev.estudios.map(s => s === oldStudy ? corrected : s)
-                        }));
-                    }
-                    saveSettings(null, updatedOptions);
-                }
-            };
-
-            const addCustomDiagnosis = () => {
-                if (newDiagnosis && !diagnosesOptions.includes(newDiagnosis)) {
-                    const updated = [...diagnosesOptions, newDiagnosis];
-                    saveSettings(updated, null);
-                    setFormData(prev => ({...prev, diagnosticos: [...prev.diagnosticos, newDiagnosis]}));
-                    setNewDiagnosis('');
-                }
-            };
-
-            const removeCustomDiagnosis = (diagToRemove) => {
-                 if (confirm(`¿Eliminar "${diagToRemove}"?`)) {
-                    const updated = diagnosesOptions.filter(d => d !== diagToRemove);
+                if (corrected.trim() === '') return removeCustomDiagnosis(d);
+                if (corrected !== d) {
+                    const updated = diagnosesOptions.map(x => x === d ? corrected : x);
+                    if (formData.diagnosticos.includes(d)) setFormData(p => ({...p, diagnosticos: p.diagnosticos.map(x => x===d?corrected:x)}));
                     saveSettings(updated, null);
                 }
             };
+
+            // Ordenar diagnósticos alfabéticamente
+            const sortedDiagnoses = useMemo(() => {
+                return [...diagnosesOptions].sort((a, b) => a.localeCompare(b));
+            }, [diagnosesOptions]);
+
+            // Filtrar diagnósticos para el menú inteligente
+            const filteredDiagnoses = useMemo(() => {
+                const term = diagSearch.toLowerCase();
+                return sortedDiagnoses.filter(d => d.toLowerCase().includes(term));
+            }, [sortedDiagnoses, diagSearch]);
 
             const handleSubmit = (e) => {
                 e.preventDefault();
@@ -400,38 +344,22 @@
                 setFormData(initialFormState);
             };
 
-            const toggleStudy = (study) => {
-                setFormData(prev => ({
-                    ...prev,
-                    estudios: prev.estudios.includes(study) ? prev.estudios.filter(s => s !== study) : [...prev.estudios, study]
-                }));
-            };
-
-            // Fix for handleDelete
+            const toggleStudy = (s) => setFormData(p => ({...p, estudios: p.estudios.includes(s) ? p.estudios.filter(x => x!==s) : [...p.estudios, s]}));
             const handleDelete = (id) => {
-                if (!window.confirm("¿Confirma que desea eliminar este registro?")) return;
-                
+                if (!window.confirm("¿Eliminar registro?")) return;
                 try {
-                    // Update Local
                     setPatients(prev => prev.filter(p => p.id !== id));
-                    // Queue Sync
                     setPendingSyncs(prev => [...prev, { type: 'delete_patient', id }]);
-                    showToast("Registro eliminado");
-                } catch (e) {
-                    console.error(e);
-                    showToast("Error al intentar borrar", 'error');
-                }
+                    showToast("Eliminado");
+                } catch (e) { showToast("Error al borrar", 'error'); }
             };
 
-            const filtered = useMemo(() => {
+            const filteredPatients = useMemo(() => {
                 if (!searchTerm && !dateFilterStart && !dateFilterEnd) return [];
-                const lowerTerm = searchTerm.toLowerCase();
+                const term = searchTerm.toLowerCase();
                 return patients.filter(p => {
                     if (!p) return false; 
-                    const nameMatch = (p.nombre || '').toLowerCase().includes(lowerTerm);
-                    const diagMatch = (p.diagnosticos || []).some(d => d.toLowerCase().includes(lowerTerm));
-                    const notesMatch = (p.notas || '').toLowerCase().includes(lowerTerm);
-                    const matchesSearch = nameMatch || diagMatch || notesMatch;
+                    const matchesSearch = (p.nombre||'').toLowerCase().includes(term) || (p.diagnosticos||[]).some(d => d.toLowerCase().includes(term)) || (p.notas||'').toLowerCase().includes(term);
                     const matchesDate = (!dateFilterStart || p.fecha >= dateFilterStart) && (!dateFilterEnd || p.fecha <= dateFilterEnd);
                     return matchesSearch && matchesDate;
                 });
@@ -439,12 +367,11 @@
 
             const stats = useMemo(() => {
                 const monthData = patients.filter(p => p && p.fecha && p.fecha.startsWith(statsMonth));
-                let ecgAmb = 0, ecgInt = 0, echoAmb = 0, echoInt = 0;
+                let ecgAmb=0, ecgInt=0, echoAmb=0, echoInt=0;
                 monthData.forEach(p => {
                     const isAmb = p.tipoPaciente === 'Ambulatorio';
                     if (p.estudios.includes('ECG')) isAmb ? ecgAmb++ : ecgInt++;
-                    const isEcho = p.estudios.some(s => s !== 'ECG'); 
-                    if (isEcho) isAmb ? echoAmb++ : echoInt++;
+                    if (p.estudios.some(s => s !== 'ECG')) isAmb ? echoAmb++ : echoInt++;
                 });
                 const [y, m] = statsMonth.split('-');
                 const label = new Date(parseInt(y), parseInt(m)-1, 2).toLocaleString('es-AR', { month: 'long', year: 'numeric' });
@@ -456,20 +383,12 @@
                 const text = `Consulta Cardiológica\nPaciente: ${p.nombre}\nEdad: ${edadStr}\nFecha: ${new Date(p.fecha).toLocaleDateString('es-AR')}\nTipo: ${p.tipoPaciente}\nEstudios: ${p.estudios.join(', ')}\nDiagnóstico: ${p.diagnosticos.join(', ')}\nNotas: ${p.notas || '-'}`;
                 shareText(text);
             };
-
-            const handleShareStats = () => {
-                const text = `Estadísticas ${stats.label}\n\nECG Total: ${stats.ecgTotal}\n - Ambulatorio: ${stats.ecgAmb}\n - Internado: ${stats.ecgInt}\n\nEcografías Total: ${stats.echoTotal}\n - Ambulatorio: ${stats.echoAmb}\n - Internado: ${stats.echoInt}\n\nTotal Pacientes: ${stats.total}`;
-                shareText(text);
-            };
-
+            const handleShareStats = () => shareText(`Estadísticas ${stats.label}\n\nECG Total: ${stats.ecgTotal}\n - Ambulatorio: ${stats.ecgAmb}\n - Internado: ${stats.ecgInt}\n\nEcografías Total: ${stats.echoTotal}\n - Ambulatorio: ${stats.echoAmb}\n - Internado: ${stats.echoInt}\n\nTotal Pacientes: ${stats.total}`);
             const shareText = async (text) => {
-                try {
-                    if (navigator.share) { await navigator.share({ title: 'Cardio', text }); return true; }
-                    await navigator.clipboard.writeText(text); showToast("Copiado al portapapeles");
-                } catch (e) { console.log(e); }
+                try { if (navigator.share) { await navigator.share({ title: 'Cardio', text }); return true; } await navigator.clipboard.writeText(text); showToast("Copiado"); } catch (e) {}
             };
 
-            return React.createElement("div", { className: "min-h-screen bg-gray-50 pb-20" },
+            return React.createElement("div", { className: "min-h-screen bg-gray-50 pb-20", onClick: () => setIsDiagDropdownOpen(false) },
                 notification && React.createElement(Toast, { message: notification.message, type: notification.type, onClose: () => setNotification(null) }),
                 
                 React.createElement("header", { className: "bg-white shadow-sm border-b sticky top-0 z-20 px-4 h-16 flex items-center justify-between max-w-6xl mx-auto" },
@@ -490,21 +409,12 @@
                     )
                 ),
 
-                // BANNER DE ERROR Y SOLUCIÓN
                 syncError && React.createElement("div", { className: "bg-red-50 border-l-4 border-red-500 p-4 m-4 rounded flex flex-col gap-2 shadow-sm" },
                     React.createElement("div", { className: "flex justify-between items-start" },
-                        React.createElement("div", null, 
-                            React.createElement("p", { className: "font-bold flex items-center gap-2 text-red-700" }, React.createElement(AlertTriangle, { size: 18 }), "Error de Sincronización"),
-                            React.createElement("p", { className: "text-sm text-red-600" }, syncError)
-                        ),
-                        React.createElement("button", { onClick: clearSyncQueue, className: "text-xs bg-white border border-red-200 hover:bg-red-50 px-3 py-1.5 rounded text-red-700 whitespace-nowrap ml-4 transition-colors" }, "Descartar Cambios")
+                        React.createElement("div", null, React.createElement("p", { className: "font-bold flex items-center gap-2 text-red-700" }, React.createElement(AlertTriangle, { size: 18 }), "Error de Sincronización"), React.createElement("p", { className: "text-sm text-red-600" }, syncError)),
+                        React.createElement("button", { onClick: clearSyncQueue, className: "text-xs bg-white border border-red-200 hover:bg-red-50 px-3 py-1.5 rounded text-red-700 whitespace-nowrap ml-4" }, "Descartar")
                     ),
-                    (syncError.includes("Permiso denegado") || syncError.includes("permission-denied")) && React.createElement("div", { className: "text-xs bg-red-100 p-3 rounded mt-1 border border-red-200" },
-                        React.createElement("strong", { className: "block mb-1 text-red-800" }, "SOLUCIÓN: Copia esto en las Reglas de Firebase Console:"),
-                        React.createElement("div", { className: "font-mono bg-gray-900 text-green-400 p-2 rounded overflow-x-auto select-all" }, 
-                            "rules_version = '2';\nservice cloud.firestore {\n  match /databases/{database}/documents {\n    match /{document=**} {\n      allow read, write: if true;\n    }\n  }\n}"
-                        )
-                    )
+                    syncError.includes("Permiso") && React.createElement("div", { className: "text-xs bg-red-100 p-3 rounded mt-1 border border-red-200" }, React.createElement("strong", { className: "block mb-1 text-red-800" }, "Copia esto en Reglas de Firebase:"), React.createElement("div", { className: "font-mono bg-gray-900 text-green-400 p-2 rounded overflow-x-auto select-all" }, "rules_version = '2';\nservice cloud.firestore {\n  match /databases/{database}/documents {\n    match /{document=**} {\n      allow read, write: if true;\n    }\n  }\n}"))
                 ),
 
                 React.createElement("main", { className: "max-w-6xl mx-auto px-4 py-6" },
@@ -518,16 +428,13 @@
                                 React.createElement("div", { className: "grid grid-cols-1 md:grid-cols-2 gap-4" },
                                     React.createElement("div", null, React.createElement("label", { className: "block text-sm text-gray-700 font-medium mb-1" }, "Fecha"), React.createElement("input", { type: "date", required: true, className: "w-full p-2 border rounded-lg focus:ring-2 focus:ring-teal-500 outline-none", value: formData.fecha, onChange: e => setFormData({...formData, fecha: e.target.value}) })),
                                     React.createElement("div", null, React.createElement("label", { className: "block text-sm text-gray-700 font-medium mb-1" }, "Nombre y Apellido"), React.createElement("input", { type: "text", required: true, placeholder: "Ej. Juan Pérez", className: "w-full p-2 border rounded-lg focus:ring-2 focus:ring-teal-500 outline-none", value: formData.nombre, onChange: e => setFormData({...formData, nombre: e.target.value}) })),
-                                    // EDAD MODIFICADA CON SELECTOR
                                     React.createElement("div", null, 
                                         React.createElement("label", { className: "block text-sm text-gray-700 font-medium mb-1" }, "Edad"), 
                                         React.createElement("div", { className: "flex gap-2" },
                                             React.createElement("input", { type: "number", required: true, className: "w-2/3 p-2 border rounded-lg focus:ring-2 focus:ring-teal-500 outline-none", value: formData.edad, onChange: e => setFormData({...formData, edad: e.target.value}) }),
                                             React.createElement("div", { className: "relative w-1/3" },
                                                 React.createElement("select", { className: "w-full p-2 border rounded-lg appearance-none bg-white focus:ring-2 focus:ring-teal-500 outline-none", value: formData.edadUnidad || 'Años', onChange: e => setFormData({...formData, edadUnidad: e.target.value}) },
-                                                    React.createElement("option", { value: "Años" }, "Años"),
-                                                    React.createElement("option", { value: "Meses" }, "Meses"),
-                                                    React.createElement("option", { value: "Días" }, "Días")
+                                                    React.createElement("option", { value: "Años" }, "Años"), React.createElement("option", { value: "Meses" }, "Meses"), React.createElement("option", { value: "Días" }, "Días")
                                                 ),
                                                 React.createElement(ChevronDown, { className: "absolute right-2 top-3 text-gray-400 pointer-events-none", size: 16 })
                                             )
@@ -536,33 +443,13 @@
                                     React.createElement("div", null, React.createElement("label", { className: "block text-sm text-gray-700 font-medium mb-1" }, "Tipo"), React.createElement("div", { className: "flex gap-4 mt-2" }, ['Ambulatorio', 'Internado'].map(t => React.createElement("label", { key: t, className: "flex items-center gap-2 cursor-pointer" }, React.createElement("input", { type: "radio", name: "tipo", value: t, checked: formData.tipoPaciente === t, onChange: () => setFormData({...formData, tipoPaciente: t}), className: "text-teal-600 focus:ring-teal-500" }), React.createElement("span", null, t)))))
                                 ),
                                 
-                                // Sección Estudios (CON BOTÓN DE EDITAR Y PAD MÁS AMPLIO)
                                 React.createElement("div", null, 
-                                    React.createElement("div", { className: "flex justify-between items-center mb-2" }, React.createElement("label", { className: "block text-sm text-gray-700 font-medium" }, "Estudios")),
+                                    React.createElement("label", { className: "block text-sm text-gray-700 font-medium mb-2" }, "Estudios"),
                                     React.createElement("div", { className: "flex flex-wrap gap-2 mb-3" }, studiesOptions.map(s => 
                                         React.createElement("div", { key: s, className: "relative group inline-flex items-center" }, 
-                                            // Botón del Estudio
-                                            React.createElement("button", { 
-                                                type: "button", 
-                                                onClick: () => toggleStudy(s), 
-                                                // Padding dinámico: si es default solo tiene padding normal, si es custom tiene padding extra para los botones
-                                                className: `${DEFAULT_STUDIES.includes(s) ? 'px-3' : 'pr-16 pl-3'} py-1.5 rounded-full text-sm font-medium border transition-colors ${formData.estudios.includes(s) ? 'bg-teal-100 text-teal-800 border-teal-500' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}` 
-                                            }, s),
-                                            
-                                            // Botones de Editar/Borrar (SOLO PARA NO-DEFAULTS)
-                                            !DEFAULT_STUDIES.includes(s) && React.createElement("button", { 
-                                                type: "button", 
-                                                title: "Editar / Borrar",
-                                                onClick: (e) => { e.stopPropagation(); editCustomStudy(s); },
-                                                className: "absolute right-8 top-1/2 -translate-y-1/2 p-1 text-gray-400 hover:text-blue-500 opacity-0 group-hover:opacity-100 transition-opacity"
-                                            }, React.createElement(Edit2, { size: 12 })),
-                                            
-                                            !DEFAULT_STUDIES.includes(s) && React.createElement("button", { 
-                                                type: "button", 
-                                                title: "Borrar",
-                                                onClick: (e) => { e.stopPropagation(); removeCustomStudy(s); },
-                                                className: "absolute right-2 top-1/2 -translate-y-1/2 p-1 text-gray-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"
-                                            }, React.createElement(X, { size: 14 }))
+                                            React.createElement("button", { type: "button", onClick: () => toggleStudy(s), className: `${DEFAULT_STUDIES.includes(s) ? 'px-3' : 'pr-16 pl-3'} py-1.5 rounded-full text-sm font-medium border transition-colors ${formData.estudios.includes(s) ? 'bg-teal-100 text-teal-800 border-teal-500' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}` }, s),
+                                            !DEFAULT_STUDIES.includes(s) && React.createElement("button", { type: "button", onClick: (e) => { e.stopPropagation(); editCustomStudy(s); }, className: "absolute right-8 top-1/2 -translate-y-1/2 p-1 text-gray-400 hover:text-blue-500 opacity-0 group-hover:opacity-100 transition-opacity" }, React.createElement(Edit2, { size: 12 })),
+                                            !DEFAULT_STUDIES.includes(s) && React.createElement("button", { type: "button", onClick: (e) => { e.stopPropagation(); removeCustomStudy(s); }, className: "absolute right-2 top-1/2 -translate-y-1/2 p-1 text-gray-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity" }, React.createElement(X, { size: 14 }))
                                         )
                                     )),
                                     React.createElement("div", { className: "flex gap-2" }, 
@@ -571,18 +458,55 @@
                                     )
                                 ),
 
-                                // Sección Diagnósticos
+                                // DIAGNÓSTICOS CON MENÚ INTELIGENTE
                                 React.createElement("div", null, 
                                     React.createElement("label", { className: "block text-sm text-gray-700 font-medium mb-2" }, "Diagnósticos"), 
-                                    React.createElement("div", { className: "relative mb-2" }, 
-                                        React.createElement("select", { className: "w-full p-2 border rounded-lg appearance-none bg-white focus:ring-2 focus:ring-teal-500 outline-none", value: "", onChange: e => { if(e.target.value) { setFormData(p => p.diagnosticos.includes(e.target.value) ? p : {...p, diagnosticos: [...p.diagnosticos, e.target.value]}); }}}, React.createElement("option", { value: "" }, "Seleccionar diagnóstico de la lista..."), diagnosesOptions.map(d => React.createElement("option", { key: d, value: d, disabled: formData.diagnosticos.includes(d) }, d))),
-                                        React.createElement(ChevronDown, { className: "absolute right-3 top-3 text-gray-400 pointer-events-none", size: 16 })
+                                    React.createElement("div", { className: "relative mb-3", onClick: (e) => e.stopPropagation() }, 
+                                        React.createElement("div", { className: "relative" },
+                                            React.createElement("input", { 
+                                                type: "text", 
+                                                className: "w-full p-2 pr-10 border rounded-lg focus:ring-2 focus:ring-teal-500 outline-none", 
+                                                placeholder: "Buscar o crear diagnóstico...",
+                                                value: diagSearch,
+                                                onChange: (e) => { setDiagSearch(e.target.value); setIsDiagDropdownOpen(true); },
+                                                onFocus: () => setIsDiagDropdownOpen(true)
+                                            }),
+                                            React.createElement("div", { className: "absolute right-3 top-3 text-gray-400 pointer-events-none" }, diagSearch ? React.createElement(Search, {size: 16}) : React.createElement(ChevronDown, {size: 16}))
+                                        ),
+                                        // Dropdown Inteligente
+                                        isDiagDropdownOpen && React.createElement("div", { className: "absolute z-30 w-full bg-white border border-gray-200 rounded-lg shadow-lg mt-1 max-h-60 overflow-y-auto scroller" },
+                                            // Lista Filtrada
+                                            filteredDiagnoses.map(d => 
+                                                React.createElement("div", { key: d, className: "flex justify-between items-center px-3 py-2 hover:bg-gray-50 group" },
+                                                    React.createElement("span", { 
+                                                        className: `flex-1 cursor-pointer ${formData.diagnosticos.includes(d) ? 'text-teal-600 font-bold' : 'text-gray-700'}`,
+                                                        onClick: () => {
+                                                            if (!formData.diagnosticos.includes(d)) {
+                                                                setFormData(p => ({...p, diagnosticos: [...p.diagnosticos, d]}));
+                                                            }
+                                                            setDiagSearch(''); 
+                                                            // Mantener abierto para multi-selección o cerrar? "Selección debe ser múltiple" -> mejor mantener y limpiar search
+                                                        }
+                                                    }, d, formData.diagnosticos.includes(d) && React.createElement(Check, {size: 14, className: "inline ml-2"})),
+                                                    // Acciones en el item
+                                                    React.createElement("div", { className: "flex gap-1" },
+                                                        React.createElement("button", { type: "button", onClick: (e) => {e.stopPropagation(); editCustomDiagnosis(d);}, className: "p-1 text-gray-400 hover:text-blue-500" }, React.createElement(Edit2, {size: 14})),
+                                                        React.createElement("button", { type: "button", onClick: (e) => {e.stopPropagation(); removeCustomDiagnosis(d);}, className: "p-1 text-gray-400 hover:text-red-500" }, React.createElement(Trash2, {size: 14}))
+                                                    )
+                                                )
+                                            ),
+                                            // Opción Crear
+                                            diagSearch && !filteredDiagnoses.includes(diagSearch) && (
+                                                React.createElement("button", { 
+                                                    type: "button",
+                                                    className: "w-full text-left px-3 py-2 text-teal-600 hover:bg-teal-50 font-medium flex items-center gap-2 border-t",
+                                                    onClick: () => { addCustomDiagnosis(diagSearch); setDiagSearch(''); }
+                                                }, React.createElement(Plus, {size: 16}), `Crear "${diagSearch}"`)
+                                            )
+                                        )
                                     ),
+                                    // Chips seleccionados
                                     React.createElement("div", { className: "flex flex-wrap gap-2 mb-2" }, formData.diagnosticos.map(d => React.createElement("span", { key: d, className: "bg-blue-50 text-blue-700 px-3 py-1 rounded-full text-sm border border-blue-100 flex items-center gap-1" }, d, React.createElement("button", { type: "button", onClick: () => setFormData(p => ({...p, diagnosticos: p.diagnosticos.filter(x => x!==d)})) }, React.createElement(X, { size: 14 }))))),
-                                    React.createElement("div", { className: "flex gap-2 items-center" }, 
-                                        React.createElement("input", { type: "text", placeholder: "Nuevo diagnóstico...", className: "flex-1 p-2 border rounded-lg text-sm focus:ring-1 focus:ring-teal-500 outline-none", value: newDiagnosis, onChange: e => setNewDiagnosis(e.target.value) }), 
-                                        React.createElement(Button, { variant: "secondary", onClick: addCustomDiagnosis }, React.createElement(Plus, { size: 16 }), "Crear")
-                                    )
                                 ),
 
                                 React.createElement("div", null, React.createElement("label", { className: "block text-sm text-gray-700 font-medium mb-1" }, "Notas"), React.createElement("textarea", { rows: 3, className: "w-full p-2 border rounded-lg focus:ring-2 focus:ring-teal-500 outline-none", value: formData.notas, onChange: e => setFormData({...formData, notas: e.target.value}) })),
@@ -593,7 +517,7 @@
                     activeTab === 'informes' && React.createElement("div", { className: "flex flex-col gap-4" },
                         React.createElement(Card, { className: "p-4 sticky top-0 z-10" },
                             React.createElement("div", { className: "flex flex-col md:flex-row gap-4 justify-between" },
-                                React.createElement("div", { className: "relative flex-1" }, React.createElement(Search, { className: "absolute left-3 top-2.5 text-gray-400", size: 18 }), React.createElement("input", { type: "text", placeholder: "Buscar por nombre, diagnóstico o notas...", className: "w-full pl-10 p-2 border rounded-lg outline-none focus:ring-2 focus:ring-teal-500", value: searchTerm, onChange: e => setSearchTerm(e.target.value) })),
+                                React.createElement("div", { className: "relative flex-1" }, React.createElement(Search, { className: "absolute left-3 top-2.5 text-gray-400", size: 18 }), React.createElement("input", { type: "text", placeholder: "Buscar...", className: "w-full pl-10 p-2 border rounded-lg outline-none focus:ring-2 focus:ring-teal-500", value: searchTerm, onChange: e => setSearchTerm(e.target.value) })),
                                 React.createElement("div", { className: "flex gap-2 items-center" }, React.createElement("input", { type: "date", className: "p-2 border rounded-lg text-sm", value: dateFilterStart, onChange: e => setDateFilterStart(e.target.value) }), React.createElement("span", { className: "text-gray-400" }, "→"), React.createElement("input", { type: "date", className: "p-2 border rounded-lg text-sm", value: dateFilterEnd, onChange: e => setDateFilterEnd(e.target.value) }))
                             ),
                             React.createElement(Button, { variant: "outline", className: "mt-4 w-full md:w-auto", onClick: () => {
@@ -616,7 +540,6 @@
                                         React.createElement("span", { className: "font-bold text-gray-900" }, p.nombre),
                                         React.createElement("span", { className: "text-xs text-gray-500" }, new Date(p.fecha).toLocaleDateString('es-AR'))
                                     ),
-                                    // MOSTRAR EDAD CON UNIDAD
                                     React.createElement("div", { className: "text-sm text-gray-600" }, `${p.edad} ${p.edadUnidad || 'Años'} • ${p.tipoPaciente}`),
                                     React.createElement("div", { className: "mt-2 flex flex-wrap gap-1" }, p.estudios.map(s => React.createElement("span", { key: s, className: "text-xs bg-teal-50 text-teal-700 px-2 py-0.5 rounded border border-teal-100" }, s))),
                                     React.createElement("div", { className: "mt-1 flex flex-wrap gap-1" }, p.diagnosticos.map(d => React.createElement("span", { key: d, className: "text-xs bg-blue-50 text-blue-700 px-2 py-0.5 rounded border border-blue-100" }, d)))
