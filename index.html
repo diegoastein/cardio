@@ -29,7 +29,7 @@
         import { 
             Heart, Activity, FileText, Search, Plus, Download, Trash2, Edit, Share2, 
             X, Calendar, ClipboardList, ChevronDown, Wifi, WifiOff, RefreshCw, 
-            Loader2, AlertTriangle, Settings, CheckCircle, Info, Save, Database
+            Loader2, AlertTriangle, Settings, CheckCircle, Info, Save
         } from 'lucide-react';
         
         import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
@@ -88,6 +88,7 @@
                                     this.state.error && this.state.error.toString()
                                 )
                             ),
+                            React.createElement("p", { className: "text-gray-600 mb-6 text-sm" }, "Intenta borrar los datos locales. Si el problema persiste, verifica la consola (F12) o comparte el error de arriba."),
                             React.createElement("button", { 
                                 onClick: () => { localStorage.clear(); window.location.reload(); },
                                 className: "w-full bg-red-600 text-white px-4 py-3 rounded-lg hover:bg-red-700 font-medium transition-colors"
@@ -146,7 +147,7 @@
             const [isOnline, setIsOnline] = useState(navigator.onLine);
             const [isSyncing, setIsSyncing] = useState(false);
             const [pendingSyncs, setPendingSyncs] = useState([]);
-            const [syncError, setSyncError] = useState(null); // Nuevo estado para errores de sync
+            const [syncError, setSyncError] = useState(null); 
             
             const [notification, setNotification] = useState(null);
             const [isSubmitting, setIsSubmitting] = useState(false);
@@ -223,7 +224,7 @@
                 }, err => {
                     console.log("Error Snapshot:", err);
                     if (err.code === 'permission-denied') {
-                        setSyncError("Permiso denegado: Revisa las Reglas de Seguridad en Firebase Console.");
+                        setSyncError("Permiso denegado. Se requieren Reglas de Escritura.");
                     }
                 });
 
@@ -234,7 +235,7 @@
                         if (data.diagnosticos && Array.isArray(data.diagnosticos)) setDiagnosesOptions(data.diagnosticos);
                         if (data.estudios && Array.isArray(data.estudios)) setStudiesOptions(data.estudios);
                     }
-                }, err => console.log("Config offline (ignorable)"));
+                }, err => console.log("Config offline"));
 
                 return () => { unsubPatients(); unsubSettings(); };
             }, [user, pendingSyncs.length]);
@@ -244,7 +245,7 @@
                 const process = async () => {
                     if (!isOnline || !user || pendingSyncs.length === 0 || isSyncing) return;
                     setIsSyncing(true);
-                    setSyncError(null); // Limpiar error previo al reintentar
+                    setSyncError(null); 
                     
                     const item = pendingSyncs[0];
                     const rootCollection = 'data_compartida';
@@ -265,7 +266,7 @@
                     } catch (e) { 
                         console.error("Sync Error", e); 
                         let msg = e.message;
-                        if (e.code === 'permission-denied') msg = "Permiso denegado en Firestore. Habilita las reglas de escritura.";
+                        if (e.code === 'permission-denied') msg = "Permiso denegado. Habilita permisos en la consola.";
                         setSyncError(msg);
                     } 
                     finally { setIsSyncing(false); }
@@ -276,7 +277,7 @@
 
             // Helpers
             const clearSyncQueue = () => {
-                if(confirm("¿Estás seguro? Se descartarán los cambios no guardados en la nube para destrabar la aplicación.")) {
+                if(window.confirm("¿Descartar cambios pendientes y limpiar error?")) {
                     setPendingSyncs([]);
                     setSyncError(null);
                 }
@@ -297,26 +298,12 @@
                 }
             };
 
-            const removeCustomStudy = (studyToRemove) => {
-                if (confirm(`¿Eliminar "${studyToRemove}"?`)) {
-                    const updated = studiesOptions.filter(s => s !== studyToRemove);
-                    saveSettings(null, updated);
-                }
-            };
-
             const addCustomDiagnosis = () => {
                 if (newDiagnosis && !diagnosesOptions.includes(newDiagnosis)) {
                     const updated = [...diagnosesOptions, newDiagnosis];
                     saveSettings(updated, null);
                     setFormData(prev => ({...prev, diagnosticos: [...prev.diagnosticos, newDiagnosis]}));
                     setNewDiagnosis('');
-                }
-            };
-
-            const removeCustomDiagnosis = (diagToRemove) => {
-                 if (confirm(`¿Eliminar "${diagToRemove}"?`)) {
-                    const updated = diagnosesOptions.filter(d => d !== diagToRemove);
-                    saveSettings(updated, null);
                 }
             };
 
@@ -345,6 +332,22 @@
                     ...prev,
                     estudios: prev.estudios.includes(study) ? prev.estudios.filter(s => s !== study) : [...prev.estudios, study]
                 }));
+            };
+
+            // Fix for handleDelete
+            const handleDelete = (id) => {
+                if (!window.confirm("¿Confirma que desea eliminar este registro?")) return;
+                
+                try {
+                    // Update Local
+                    setPatients(prev => prev.filter(p => p.id !== id));
+                    // Queue Sync
+                    setPendingSyncs(prev => [...prev, { type: 'delete_patient', id }]);
+                    showToast("Registro eliminado");
+                } catch (e) {
+                    console.error(e);
+                    showToast("Error al intentar borrar", 'error');
+                }
             };
 
             const filtered = useMemo(() => {
@@ -395,7 +398,6 @@
             return React.createElement("div", { className: "min-h-screen bg-gray-50 pb-20" },
                 notification && React.createElement(Toast, { message: notification.message, type: notification.type, onClose: () => setNotification(null) }),
                 
-                // Header
                 React.createElement("header", { className: "bg-white shadow-sm border-b sticky top-0 z-20 px-4 h-16 flex items-center justify-between max-w-6xl mx-auto" },
                     React.createElement("div", { className: "flex items-center gap-2 text-teal-700" },
                         React.createElement(Heart, { className: "fill-teal-600", size: 28 }),
@@ -414,13 +416,21 @@
                     )
                 ),
 
-                // Error Banner Global
-                syncError && React.createElement("div", { className: "bg-red-100 border-l-4 border-red-500 text-red-700 p-4 m-4 rounded flex justify-between items-center" },
-                    React.createElement("div", null, 
-                        React.createElement("p", { className: "font-bold flex items-center gap-2" }, React.createElement(AlertTriangle, { size: 18 }), "Error de Sincronización"),
-                        React.createElement("p", { className: "text-sm" }, syncError)
+                // BANNER DE ERROR Y SOLUCIÓN
+                syncError && React.createElement("div", { className: "bg-red-50 border-l-4 border-red-500 p-4 m-4 rounded flex flex-col gap-2 shadow-sm" },
+                    React.createElement("div", { className: "flex justify-between items-start" },
+                        React.createElement("div", null, 
+                            React.createElement("p", { className: "font-bold flex items-center gap-2 text-red-700" }, React.createElement(AlertTriangle, { size: 18 }), "Error de Sincronización"),
+                            React.createElement("p", { className: "text-sm text-red-600" }, syncError)
+                        ),
+                        React.createElement("button", { onClick: clearSyncQueue, className: "text-xs bg-white border border-red-200 hover:bg-red-50 px-3 py-1.5 rounded text-red-700 whitespace-nowrap ml-4 transition-colors" }, "Descartar Cambios")
                     ),
-                    React.createElement("button", { onClick: clearSyncQueue, className: "text-sm bg-red-200 hover:bg-red-300 px-3 py-1 rounded text-red-800" }, "Descartar Cambios")
+                    (syncError.includes("Permiso denegado") || syncError.includes("permission-denied")) && React.createElement("div", { className: "text-xs bg-red-100 p-3 rounded mt-1 border border-red-200" },
+                        React.createElement("strong", { className: "block mb-1 text-red-800" }, "SOLUCIÓN: Copia esto en las Reglas de Firebase Console:"),
+                        React.createElement("div", { className: "font-mono bg-gray-900 text-green-400 p-2 rounded overflow-x-auto select-all" }, 
+                            "rules_version = '2';\nservice cloud.firestore {\n  match /databases/{database}/documents {\n    match /{document=**} {\n      allow read, write: if true;\n    }\n  }\n}"
+                        )
+                    )
                 ),
 
                 React.createElement("main", { className: "max-w-6xl mx-auto px-4 py-6" },
@@ -437,31 +447,45 @@
                                     React.createElement("div", null, React.createElement("label", { className: "block text-sm text-gray-700 font-medium mb-1" }, "Edad"), React.createElement("input", { type: "number", required: true, className: "w-full p-2 border rounded-lg focus:ring-2 focus:ring-teal-500 outline-none", value: formData.edad, onChange: e => setFormData({...formData, edad: e.target.value}) })),
                                     React.createElement("div", null, React.createElement("label", { className: "block text-sm text-gray-700 font-medium mb-1" }, "Tipo"), React.createElement("div", { className: "flex gap-4 mt-2" }, ['Ambulatorio', 'Internado'].map(t => React.createElement("label", { key: t, className: "flex items-center gap-2 cursor-pointer" }, React.createElement("input", { type: "radio", name: "tipo", value: t, checked: formData.tipoPaciente === t, onChange: () => setFormData({...formData, tipoPaciente: t}), className: "text-teal-600 focus:ring-teal-500" }), React.createElement("span", null, t)))))
                                 ),
+                                
+                                // Sección Estudios (MODIFICADO: Dropdown + Chips)
                                 React.createElement("div", null, 
-                                    React.createElement("div", { className: "flex justify-between items-center mb-2" }, React.createElement("label", { className: "block text-sm text-gray-700 font-medium" }, "Estudios")),
-                                    React.createElement("div", { className: "flex flex-wrap gap-2 mb-3" }, studiesOptions.map(s => 
-                                        React.createElement("div", { key: s, className: "relative group" },
-                                            React.createElement("button", { type: "button", onClick: () => toggleStudy(s), className: `pr-8 pl-3 py-1.5 rounded-full text-sm font-medium border transition-colors ${formData.estudios.includes(s) ? 'bg-teal-100 text-teal-800 border-teal-500' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}` }, s),
-                                            React.createElement("button", { type: "button", onClick: (e) => { e.stopPropagation(); removeCustomStudy(s); }, className: "absolute right-1 top-1/2 -translate-y-1/2 p-0.5 text-gray-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity" }, React.createElement(X, { size: 14 }))
-                                        )
-                                    )),
+                                    React.createElement("label", { className: "block text-sm text-gray-700 font-medium mb-2" }, "Estudios"),
+                                    React.createElement("div", { className: "relative mb-2" }, 
+                                        React.createElement("select", { 
+                                            className: "w-full p-2 border rounded-lg appearance-none bg-white focus:ring-2 focus:ring-teal-500 outline-none", 
+                                            value: "", // Siempre mostrar "Seleccionar..."
+                                            onChange: e => { 
+                                                const val = e.target.value;
+                                                if(val) { 
+                                                    // Agregar solo si no está ya seleccionado
+                                                    setFormData(p => p.estudios.includes(val) ? p : {...p, estudios: [...p.estudios, val]}); 
+                                                }
+                                            }
+                                        }, React.createElement("option", { value: "" }, "Seleccionar estudio de la lista..."), studiesOptions.map(s => React.createElement("option", { key: s, value: s, disabled: formData.estudios.includes(s) }, s))),
+                                        React.createElement(ChevronDown, { className: "absolute right-3 top-3 text-gray-400 pointer-events-none", size: 16 })
+                                    ),
+                                    React.createElement("div", { className: "flex flex-wrap gap-2 mb-2" }, formData.estudios.map(s => React.createElement("span", { key: s, className: "bg-teal-50 text-teal-700 px-3 py-1 rounded-full text-sm border border-teal-100 flex items-center gap-1" }, s, React.createElement("button", { type: "button", onClick: () => setFormData(p => ({...p, estudios: p.estudios.filter(x => x!==s)})) }, React.createElement(X, { size: 14 }))))),
                                     React.createElement("div", { className: "flex gap-2" }, 
                                         React.createElement("input", { type: "text", placeholder: "Nuevo estudio...", className: "flex-1 p-2 border rounded-lg text-sm focus:ring-1 focus:ring-teal-500 outline-none", value: newStudy, onChange: e => setNewStudy(e.target.value) }), 
                                         React.createElement(Button, { variant: "secondary", onClick: addCustomStudy }, React.createElement(Plus, { size: 16 }), "Agregar")
                                     )
                                 ),
+
+                                // Sección Diagnósticos
                                 React.createElement("div", null, 
                                     React.createElement("label", { className: "block text-sm text-gray-700 font-medium mb-2" }, "Diagnósticos"), 
-                                    React.createElement("div", { className: "relative mb-3" }, 
+                                    React.createElement("div", { className: "relative mb-2" }, 
                                         React.createElement("select", { className: "w-full p-2 border rounded-lg appearance-none bg-white focus:ring-2 focus:ring-teal-500 outline-none", value: "", onChange: e => { if(e.target.value) { setFormData(p => p.diagnosticos.includes(e.target.value) ? p : {...p, diagnosticos: [...p.diagnosticos, e.target.value]}); }}}, React.createElement("option", { value: "" }, "Seleccionar diagnóstico de la lista..."), diagnosesOptions.map(d => React.createElement("option", { key: d, value: d, disabled: formData.diagnosticos.includes(d) }, d))),
                                         React.createElement(ChevronDown, { className: "absolute right-3 top-3 text-gray-400 pointer-events-none", size: 16 })
                                     ),
-                                    React.createElement("div", { className: "flex flex-wrap gap-2 mb-3" }, formData.diagnosticos.map(d => React.createElement("span", { key: d, className: "bg-blue-50 text-blue-700 px-3 py-1 rounded-full text-sm border border-blue-100 flex items-center gap-1" }, d, React.createElement("button", { type: "button", onClick: () => setFormData(p => ({...p, diagnosticos: p.diagnosticos.filter(x => x!==d)})) }, React.createElement(X, { size: 14 }))))),
+                                    React.createElement("div", { className: "flex flex-wrap gap-2 mb-2" }, formData.diagnosticos.map(d => React.createElement("span", { key: d, className: "bg-blue-50 text-blue-700 px-3 py-1 rounded-full text-sm border border-blue-100 flex items-center gap-1" }, d, React.createElement("button", { type: "button", onClick: () => setFormData(p => ({...p, diagnosticos: p.diagnosticos.filter(x => x!==d)})) }, React.createElement(X, { size: 14 }))))),
                                     React.createElement("div", { className: "flex gap-2 items-center" }, 
                                         React.createElement("input", { type: "text", placeholder: "Nuevo diagnóstico...", className: "flex-1 p-2 border rounded-lg text-sm focus:ring-1 focus:ring-teal-500 outline-none", value: newDiagnosis, onChange: e => setNewDiagnosis(e.target.value) }), 
                                         React.createElement(Button, { variant: "secondary", onClick: addCustomDiagnosis }, React.createElement(Plus, { size: 16 }), "Crear")
                                     )
                                 ),
+
                                 React.createElement("div", null, React.createElement("label", { className: "block text-sm text-gray-700 font-medium mb-1" }, "Notas"), React.createElement("textarea", { rows: 3, className: "w-full p-2 border rounded-lg focus:ring-2 focus:ring-teal-500 outline-none", value: formData.notas, onChange: e => setFormData({...formData, notas: e.target.value}) })),
                                 React.createElement(Button, { type: "submit", className: "w-full py-3", disabled: isSubmitting }, isSubmitting ? React.createElement(Loader2, { className: "animate-spin" }) : (isEditing ? "Guardar Cambios" : "Guardar Paciente"))
                             )
