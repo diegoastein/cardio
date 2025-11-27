@@ -319,13 +319,32 @@
                 }
             };
 
-            // Función para editar estudios (Corregir typos)
+            // Función para editar estudios (Corregir typos O BORRAR)
             const editCustomStudy = (oldStudy) => {
-                const corrected = prompt(`Corregir nombre del estudio:`, oldStudy);
-                if (corrected && corrected !== oldStudy) {
-                    // 1. Actualizar la lista de opciones
+                const corrected = prompt(`Editar nombre del estudio "${oldStudy}" (o dejar vacío para borrar):`, oldStudy);
+                
+                // Si el usuario cancela, corrected es null
+                if (corrected === null) return;
+
+                // Si el usuario borra el texto y acepta
+                if (corrected.trim() === '') {
+                    if (confirm(`¿Eliminar "${oldStudy}" de la lista de estudios disponibles?`)) {
+                        const updatedOptions = studiesOptions.filter(s => s !== oldStudy);
+                        // También remover de la selección actual si estaba
+                        if (formData.estudios.includes(oldStudy)) {
+                            setFormData(prev => ({
+                                ...prev,
+                                estudios: prev.estudios.filter(s => s !== oldStudy)
+                            }));
+                        }
+                        saveSettings(null, updatedOptions);
+                    }
+                    return;
+                }
+
+                // Si el nombre cambió
+                if (corrected !== oldStudy) {
                     const updatedOptions = studiesOptions.map(s => s === oldStudy ? corrected : s);
-                    // 2. Si el estudio editado estaba seleccionado en el form actual, actualizarlo
                     if (formData.estudios.includes(oldStudy)) {
                         setFormData(prev => ({
                             ...prev,
@@ -508,33 +527,29 @@
                                     React.createElement("div", null, React.createElement("label", { className: "block text-sm text-gray-700 font-medium mb-1" }, "Tipo"), React.createElement("div", { className: "flex gap-4 mt-2" }, ['Ambulatorio', 'Internado'].map(t => React.createElement("label", { key: t, className: "flex items-center gap-2 cursor-pointer" }, React.createElement("input", { type: "radio", name: "tipo", value: t, checked: formData.tipoPaciente === t, onChange: () => setFormData({...formData, tipoPaciente: t}), className: "text-teal-600 focus:ring-teal-500" }), React.createElement("span", null, t)))))
                                 ),
                                 
-                                // Sección Estudios (CON BOTÓN DE EDITAR)
+                                // Sección Estudios (CON BOTÓN DE EDITAR Y PAD MÁS AMPLIO)
                                 React.createElement("div", null, 
-                                    React.createElement("label", { className: "block text-sm text-gray-700 font-medium mb-2" }, "Estudios"),
-                                    React.createElement("div", { className: "relative mb-2" }, 
-                                        React.createElement("select", { 
-                                            className: "w-full p-2 border rounded-lg appearance-none bg-white focus:ring-2 focus:ring-teal-500 outline-none", 
-                                            value: "", 
-                                            onChange: e => { 
-                                                const val = e.target.value;
-                                                if(val) { 
-                                                    setFormData(p => p.estudios.includes(val) ? p : {...p, estudios: [...p.estudios, val]}); 
-                                                }
-                                            }
-                                        }, React.createElement("option", { value: "" }, "Seleccionar estudio de la lista..."), studiesOptions.map(s => React.createElement("option", { key: s, value: s, disabled: formData.estudios.includes(s) }, s))),
-                                        React.createElement(ChevronDown, { className: "absolute right-3 top-3 text-gray-400 pointer-events-none", size: 16 })
-                                    ),
-                                    React.createElement("div", { className: "flex flex-wrap gap-2 mb-2" }, formData.estudios.map(s => 
-                                        React.createElement("span", { key: s, className: "bg-teal-50 text-teal-700 px-3 py-1 rounded-full text-sm border border-teal-100 flex items-center gap-1 group" }, 
-                                            s,
-                                            // Botón de Editar Estudio
+                                    React.createElement("div", { className: "flex justify-between items-center mb-2" }, React.createElement("label", { className: "block text-sm text-gray-700 font-medium" }, "Estudios")),
+                                    React.createElement("div", { className: "flex flex-wrap gap-2 mb-3" }, studiesOptions.map(s => 
+                                        React.createElement("div", { key: s, className: "relative group inline-flex items-center" }, 
+                                            // Aumento el padding derecho (pr-16) para que quepan ambos íconos
+                                            React.createElement("button", { type: "button", onClick: () => toggleStudy(s), className: `pr-16 pl-3 py-1.5 rounded-full text-sm font-medium border transition-colors ${formData.estudios.includes(s) ? 'bg-teal-100 text-teal-800 border-teal-500' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}` }, s),
+                                            
+                                            // Edit Button (Lápiz)
                                             React.createElement("button", { 
                                                 type: "button", 
-                                                title: "Corregir nombre del estudio",
+                                                title: "Editar / Borrar",
                                                 onClick: (e) => { e.stopPropagation(); editCustomStudy(s); },
-                                                className: "ml-1 text-teal-400 hover:text-teal-600 opacity-0 group-hover:opacity-100 transition-opacity"
+                                                className: "absolute right-8 top-1/2 -translate-y-1/2 p-1 text-gray-400 hover:text-blue-500 opacity-0 group-hover:opacity-100 transition-opacity"
                                             }, React.createElement(Edit2, { size: 12 })),
-                                            React.createElement("button", { type: "button", onClick: () => setFormData(p => ({...p, estudios: p.estudios.filter(x => x!==s)})) }, React.createElement(X, { size: 14 }))
+                                            
+                                            // Delete Button (X)
+                                            React.createElement("button", { 
+                                                type: "button", 
+                                                title: "Borrar",
+                                                onClick: (e) => { e.stopPropagation(); removeCustomStudy(s); },
+                                                className: "absolute right-2 top-1/2 -translate-y-1/2 p-1 text-gray-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"
+                                            }, React.createElement(X, { size: 14 }))
                                         )
                                     )),
                                     React.createElement("div", { className: "flex gap-2" }, 
