@@ -49,6 +49,9 @@
         };
         // ==========================================
 
+        // Constante para estudios inmutables
+        const DEFAULT_STUDIES = ['Ecocardiograma', 'Ecocardiograma Doppler', 'ECG'];
+
         // Verificación Segura de Configuración
         let isConfigured = false;
         try {
@@ -145,7 +148,7 @@
             const [activeTab, setActiveTab] = useState('registro');
             const [patients, setPatients] = useState([]);
             const [diagnosesOptions, setDiagnosesOptions] = useState(['CIA', 'CIV', 'DAP', 'Insuficiencia Cardíaca', 'Estenosis Aórtica', 'Miocardiopatía']);
-            const [studiesOptions, setStudiesOptions] = useState(['Ecocardiograma', 'Ecocardiograma Doppler', 'ECG']);
+            const [studiesOptions, setStudiesOptions] = useState(DEFAULT_STUDIES);
             
             const [isOnline, setIsOnline] = useState(navigator.onLine);
             const [isSyncing, setIsSyncing] = useState(false);
@@ -161,7 +164,7 @@
                 fecha: new Date().toISOString().split('T')[0], 
                 nombre: '', 
                 edad: '', 
-                edadUnidad: 'Años', // Nueva propiedad por defecto
+                edadUnidad: 'Años', 
                 estudios: [], 
                 tipoPaciente: 'Ambulatorio', 
                 diagnosticos: [], 
@@ -198,7 +201,7 @@
 
                 safeLoad('cardio_patients', setPatients, []);
                 safeLoad('cardio_diagnoses', setDiagnosesOptions, []);
-                safeLoad('cardio_studies', setStudiesOptions, []);
+                safeLoad('cardio_studies', setStudiesOptions, DEFAULT_STUDIES);
                 
                 try {
                     const savedQueue = localStorage.getItem('cardio_sync_queue');
@@ -312,25 +315,32 @@
                 }
             };
 
+            // MODIFICADO: Bloquear borrado de default
             const removeCustomStudy = (studyToRemove) => {
+                if (DEFAULT_STUDIES.includes(studyToRemove)) {
+                    alert("No se pueden borrar los estudios predeterminados.");
+                    return;
+                }
                 if (confirm(`¿Eliminar "${studyToRemove}"?`)) {
                     const updated = studiesOptions.filter(s => s !== studyToRemove);
                     saveSettings(null, updated);
                 }
             };
 
-            // Función para editar estudios (Corregir typos O BORRAR)
+            // MODIFICADO: Bloquear edición de default
             const editCustomStudy = (oldStudy) => {
+                if (DEFAULT_STUDIES.includes(oldStudy)) {
+                    // Doble check, aunque el botón debería estar oculto
+                    return;
+                }
+
                 const corrected = prompt(`Editar nombre del estudio "${oldStudy}" (o dejar vacío para borrar):`, oldStudy);
                 
-                // Si el usuario cancela, corrected es null
                 if (corrected === null) return;
 
-                // Si el usuario borra el texto y acepta
                 if (corrected.trim() === '') {
                     if (confirm(`¿Eliminar "${oldStudy}" de la lista de estudios disponibles?`)) {
                         const updatedOptions = studiesOptions.filter(s => s !== oldStudy);
-                        // También remover de la selección actual si estaba
                         if (formData.estudios.includes(oldStudy)) {
                             setFormData(prev => ({
                                 ...prev,
@@ -342,7 +352,6 @@
                     return;
                 }
 
-                // Si el nombre cambió
                 if (corrected !== oldStudy) {
                     const updatedOptions = studiesOptions.map(s => s === oldStudy ? corrected : s);
                     if (formData.estudios.includes(oldStudy)) {
@@ -532,19 +541,23 @@
                                     React.createElement("div", { className: "flex justify-between items-center mb-2" }, React.createElement("label", { className: "block text-sm text-gray-700 font-medium" }, "Estudios")),
                                     React.createElement("div", { className: "flex flex-wrap gap-2 mb-3" }, studiesOptions.map(s => 
                                         React.createElement("div", { key: s, className: "relative group inline-flex items-center" }, 
-                                            // Aumento el padding derecho (pr-16) para que quepan ambos íconos
-                                            React.createElement("button", { type: "button", onClick: () => toggleStudy(s), className: `pr-16 pl-3 py-1.5 rounded-full text-sm font-medium border transition-colors ${formData.estudios.includes(s) ? 'bg-teal-100 text-teal-800 border-teal-500' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}` }, s),
-                                            
-                                            // Edit Button (Lápiz)
+                                            // Botón del Estudio
                                             React.createElement("button", { 
+                                                type: "button", 
+                                                onClick: () => toggleStudy(s), 
+                                                // Padding dinámico: si es default solo tiene padding normal, si es custom tiene padding extra para los botones
+                                                className: `${DEFAULT_STUDIES.includes(s) ? 'px-3' : 'pr-16 pl-3'} py-1.5 rounded-full text-sm font-medium border transition-colors ${formData.estudios.includes(s) ? 'bg-teal-100 text-teal-800 border-teal-500' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}` 
+                                            }, s),
+                                            
+                                            // Botones de Editar/Borrar (SOLO PARA NO-DEFAULTS)
+                                            !DEFAULT_STUDIES.includes(s) && React.createElement("button", { 
                                                 type: "button", 
                                                 title: "Editar / Borrar",
                                                 onClick: (e) => { e.stopPropagation(); editCustomStudy(s); },
                                                 className: "absolute right-8 top-1/2 -translate-y-1/2 p-1 text-gray-400 hover:text-blue-500 opacity-0 group-hover:opacity-100 transition-opacity"
                                             }, React.createElement(Edit2, { size: 12 })),
                                             
-                                            // Delete Button (X)
-                                            React.createElement("button", { 
+                                            !DEFAULT_STUDIES.includes(s) && React.createElement("button", { 
                                                 type: "button", 
                                                 title: "Borrar",
                                                 onClick: (e) => { e.stopPropagation(); removeCustomStudy(s); },
