@@ -34,14 +34,14 @@
         // ==========================================
         // CONFIGURACIÓN DE FIREBASE (EDITAR AQUÍ)
         // ==========================================
-      const firebaseConfig = {
-  apiKey: "AIzaSyDI4kiZEbmTqsnrUEtbv8b1lTu81cP6-I8",
-  authDomain: "cardio-5531c.firebaseapp.com",
-  projectId: "cardio-5531c",
-  storageBucket: "cardio-5531c.firebasestorage.app",
-  messagingSenderId: "1879079234",
-  appId: "1:1879079234:web:0586b362de0dbd048230db"
-};
+        const firebaseConfig = {
+            apiKey: "AIzaSyDI4kiZEbmTqsnrUEtbv8b1lTu81cP6-I8",
+            authDomain: "cardio-5531c.firebaseapp.com",
+            projectId: "cardio-5531c",
+            storageBucket: "cardio-5531c.firebasestorage.app",
+            messagingSenderId: "1879079234",
+            appId: "1:1879079234:web:0586b362de0dbd048230db"
+        };
         // ==========================================
 
         // Verificación simple: ¿El usuario editó la config?
@@ -74,7 +74,8 @@
 
         const Toast = ({ message, type = 'success', onClose }) => {
             const bgClass = type === 'error' ? 'bg-red-600' : 'bg-teal-600';
-            useEffect(() => { const timer = setTimeout(onClose, 3000); return () => clearTimeout(timer); }, [onClose]);
+            // Duración reducida a 2000ms (2 segundos)
+            useEffect(() => { const timer = setTimeout(onClose, 2000); return () => clearTimeout(timer); }, [onClose]);
             return React.createElement("div", { className: `fixed top-4 right-4 ${bgClass} text-white px-6 py-4 rounded-lg shadow-xl z-50 flex items-center gap-3 toast-enter` },
                 React.createElement(type === 'error' ? AlertTriangle : CheckCircle, { size: 24 }),
                 React.createElement("span", { className: "font-medium" }, message),
@@ -180,6 +181,18 @@
                 } catch (e) { console.log(e); }
             };
 
+            const handleSharePatient = (p) => {
+                const text = `Consulta Cardiológica\n` +
+                    `Paciente: ${p.nombre}\n` +
+                    `Edad: ${p.edad} años\n` +
+                    `Fecha: ${new Date(p.fecha).toLocaleDateString('es-AR')}\n` +
+                    `Tipo: ${p.tipoPaciente}\n` +
+                    `Estudios: ${p.estudios.join(', ')}\n` +
+                    `Diagnóstico: ${p.diagnosticos.join(', ')}\n` +
+                    `Notas: ${p.notas || '-'}`;
+                shareText(text);
+            };
+
             const handleSubmit = (e) => {
                 e.preventDefault();
                 if (isSubmitting) return;
@@ -270,7 +283,16 @@
                                 React.createElement("div", null, React.createElement("label", { className: "block text-sm text-gray-700 mb-2" }, "Estudios"), React.createElement("div", { className: "flex flex-wrap gap-2" }, ['Ecocardiograma', 'Ecocardiograma Doppler', 'ECG'].map(s => React.createElement("button", { key: s, type: "button", onClick: () => setFormData(p => ({...p, estudios: p.estudios.includes(s) ? p.estudios.filter(x => x!==s) : [...p.estudios, s]})), className: `px-3 py-1 rounded-full text-sm border ${formData.estudios.includes(s) ? 'bg-teal-100 border-teal-500' : 'bg-gray-50'}` }, s)))),
                                 React.createElement("div", null, React.createElement("label", { className: "block text-sm text-gray-700 mb-2" }, "Diagnósticos"), 
                                     React.createElement("div", { className: "relative mb-2" }, 
-                                        React.createElement("select", { className: "w-full p-2 border rounded-lg appearance-none bg-white", onChange: e => { if(e.target.value) { setFormData(p => p.diagnosticos.includes(e.target.value) ? p : {...p, diagnosticos: [...p.diagnosticos, e.target.value]}); e.target.value=''; }}}, React.createElement("option", { value: "" }, "Seleccionar..."), diagnosesOptions.map(d => React.createElement("option", { key: d, value: d, disabled: formData.diagnosticos.includes(d) }, d))),
+                                        React.createElement("select", { 
+                                            className: "w-full p-2 border rounded-lg appearance-none bg-white", 
+                                            value: "", // CORRECCIÓN: Forzamos el value a vacío para que siempre muestre la opción por defecto
+                                            onChange: e => { 
+                                                const val = e.target.value;
+                                                if(val) { 
+                                                    setFormData(p => p.diagnosticos.includes(val) ? p : {...p, diagnosticos: [...p.diagnosticos, val]}); 
+                                                }
+                                            }
+                                        }, React.createElement("option", { value: "" }, "Seleccionar..."), diagnosesOptions.map(d => React.createElement("option", { key: d, value: d, disabled: formData.diagnosticos.includes(d) }, d))),
                                         React.createElement(ChevronDown, { className: "absolute right-3 top-3 text-gray-400 pointer-events-none", size: 16 })
                                     ),
                                     React.createElement("div", { className: "flex flex-wrap gap-2 mb-2" }, formData.diagnosticos.map(d => React.createElement("span", { key: d, className: "bg-blue-50 text-blue-700 px-2 py-1 rounded-full text-sm flex items-center gap-1" }, d, React.createElement("button", { type: "button", onClick: () => setFormData(p => ({...p, diagnosticos: p.diagnosticos.filter(x => x!==d)})) }, React.createElement(X, { size: 14 }))))),
@@ -309,7 +331,7 @@
                                     React.createElement("div", { className: "mt-1 flex flex-wrap gap-1" }, p.diagnosticos.map(d => React.createElement("span", { key: d, className: "text-xs bg-gray-100 text-gray-600 px-1 rounded" }, d)))
                                 ),
                                 React.createElement("div", { className: "flex gap-2" },
-                                    React.createElement("button", { onClick: () => shareText(`Paciente: ${p.nombre}\nDx: ${p.diagnosticos.join(', ')}`), className: "text-blue-600 p-1" }, React.createElement(Share2, { size: 18 })),
+                                    React.createElement("button", { onClick: () => handleSharePatient(p), className: "text-blue-600 p-1" }, React.createElement(Share2, { size: 18 })),
                                     React.createElement("button", { onClick: () => { setFormData(p); setIsEditing(true); setActiveTab('registro'); }, className: "text-gray-600 p-1" }, React.createElement(Edit, { size: 18 })),
                                     React.createElement("button", { onClick: () => handleDelete(p.id), className: "text-red-500 p-1" }, React.createElement(Trash2, { size: 18 }))
                                 )
