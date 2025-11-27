@@ -37,7 +37,7 @@
         import { getFirestore, collection, doc, setDoc, deleteDoc, onSnapshot, getDoc } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
 
         // ==========================================
-        // CONFIGURACIÓN DE FIREBASE
+        // CONFIGURACIÓN DE FIREBASE (EDITAR AQUÍ)
         // ==========================================
         const firebaseConfig = {
             apiKey: "AIzaSyDI4kiZEbmTqsnrUEtbv8b1lTu81cP6-I8",
@@ -49,9 +49,15 @@
         };
         // ==========================================
 
-        const isConfigured = !firebaseConfig.apiKey.includes("TU_API_KEY_AQUI");
-        let app, auth, db;
+        // Verificación Segura de Configuración
+        let isConfigured = false;
+        try {
+            isConfigured = firebaseConfig && firebaseConfig.apiKey && !firebaseConfig.apiKey.includes("TU_API_KEY_AQUI");
+        } catch (e) {
+            console.error("Error verificando config:", e);
+        }
 
+        let app, auth, db;
         if (isConfigured) {
             try {
                 app = initializeApp(firebaseConfig);
@@ -64,22 +70,33 @@
             }
         }
 
-        // --- Error Boundary para evitar pantalla blanca ---
+        // --- Error Boundary Mejorado para Diagnóstico ---
         class ErrorBoundary extends Component {
             constructor(props) {
                 super(props);
-                this.state = { hasError: false, error: null };
+                this.state = { hasError: false, error: null, errorInfo: null };
             }
             static getDerivedStateFromError(error) { return { hasError: true, error }; }
+            componentDidCatch(error, errorInfo) { this.setState({ errorInfo }); }
+            
             render() {
                 if (this.state.hasError) {
-                    return React.createElement("div", { className: "p-8 text-center" },
-                        React.createElement("h2", { className: "text-xl font-bold text-red-600 mb-2" }, "Algo salió mal"),
-                        React.createElement("p", { className: "text-gray-600 mb-4" }, "Se ha detectado un error en la aplicación."),
-                        React.createElement("button", { 
-                            onClick: () => { localStorage.clear(); window.location.reload(); },
-                            className: "bg-red-600 text-white px-4 py-2 rounded hover:bg-red-700"
-                        }, "Borrar datos locales y reiniciar")
+                    return React.createElement("div", { className: "min-h-screen flex items-center justify-center bg-gray-100 p-4" },
+                        React.createElement("div", { className: "bg-white p-8 rounded-xl shadow-lg max-w-lg w-full" },
+                            React.createElement("h2", { className: "text-2xl font-bold text-red-600 mb-4 flex items-center gap-2" },
+                                React.createElement(AlertTriangle, {size: 28}), "Algo salió mal"
+                            ),
+                            React.createElement("div", { className: "bg-red-50 p-4 rounded-lg mb-6 text-left overflow-auto max-h-40" },
+                                React.createElement("p", { className: "font-mono text-sm text-red-800 break-all" }, 
+                                    this.state.error && this.state.error.toString()
+                                )
+                            ),
+                            React.createElement("p", { className: "text-gray-600 mb-6 text-sm" }, "Intenta borrar los datos locales. Si el problema persiste, verifica la consola (F12) o comparte el error de arriba."),
+                            React.createElement("button", { 
+                                onClick: () => { localStorage.clear(); window.location.reload(); },
+                                className: "w-full bg-red-600 text-white px-4 py-3 rounded-lg hover:bg-red-700 font-medium transition-colors"
+                            }, "Borrar datos locales y reiniciar")
+                        )
                     );
                 }
                 return this.props.children;
@@ -165,12 +182,10 @@
                         const saved = localStorage.getItem(key);
                         if (saved) {
                             const parsed = JSON.parse(saved);
-                            // Validación básica: si es un array lo usamos, si no, fallback
                             if (Array.isArray(parsed)) setter(parsed);
                         }
                     } catch (e) {
                         console.error(`Error cargando ${key}:`, e);
-                        // Si falla, no hacemos nada y usamos el estado inicial
                     }
                 };
 
@@ -204,8 +219,11 @@
             useEffect(() => {
                 if (!user || !db) return;
                 
-                const basePath = `data_compartida/cardiologia`; 
-                const patientsRef = collection(db, basePath, 'pacientes');
+                // RUTAS CORREGIDAS
+                const rootCollection = 'data_compartida';
+                const workspaceDoc = 'cardiologia';
+                
+                const patientsRef = collection(db, rootCollection, workspaceDoc, 'pacientes');
                 
                 const unsubPatients = onSnapshot(patientsRef, (snap) => {
                     if (pendingSyncs.length === 0) {
@@ -213,7 +231,8 @@
                     }
                 }, err => console.log("Offline/Error:", err));
 
-                const settingsRef = doc(db, basePath, 'configuracion');
+                // Configuración ahora está en una ruta válida de 4 segmentos
+                const settingsRef = doc(db, rootCollection, workspaceDoc, 'configuracion', 'general');
                 const unsubSettings = onSnapshot(settingsRef, (docSnap) => {
                     if (docSnap.exists()) {
                         const data = docSnap.data();
@@ -231,15 +250,18 @@
                     if (!isOnline || !user || pendingSyncs.length === 0 || isSyncing) return;
                     setIsSyncing(true);
                     const item = pendingSyncs[0];
-                    const basePath = `data_compartida/cardiologia`;
+                    
+                    const rootCollection = 'data_compartida';
+                    const workspaceDoc = 'cardiologia';
 
                     try {
                         if (item.type === 'save_patient') {
-                            await setDoc(doc(db, basePath, 'pacientes', item.data.id), item.data);
+                            await setDoc(doc(db, rootCollection, workspaceDoc, 'pacientes', item.data.id), item.data);
                         } else if (item.type === 'delete_patient') {
-                            await deleteDoc(doc(db, basePath, 'pacientes', item.id));
+                            await deleteDoc(doc(db, rootCollection, workspaceDoc, 'pacientes', item.id));
                         } else if (item.type === 'save_settings') {
-                            await setDoc(doc(db, basePath, 'configuracion'), { 
+                            // Guardar en la nueva ruta válida
+                            await setDoc(doc(db, rootCollection, workspaceDoc, 'configuracion', 'general'), { 
                                 diagnosticos: item.diagnoses || diagnosesOptions, 
                                 estudios: item.studies || studiesOptions
                             }, { merge: true });
@@ -476,7 +498,6 @@
                         ),
                         React.createElement("div", { className: "grid md:grid-cols-2 gap-4" },
                             React.createElement(Card, { className: "p-6 bg-gradient-to-br from-teal-500 to-teal-700 text-white relative overflow-hidden" },
-                                React.createElement(Activity, { size: 100, className: "absolute -right-4 -bottom-4 text-white/10" }),
                                 React.createElement("h3", { className: "text-teal-100 font-medium mb-1" }, "Total ECGs"),
                                 React.createElement("div", { className: "text-5xl font-bold mb-4" }, stats.ecgTotal),
                                 React.createElement("div", { className: "grid grid-cols-2 text-sm bg-white/10 p-3 rounded-lg backdrop-blur-sm" }, 
@@ -485,7 +506,6 @@
                                 )
                             ),
                             React.createElement(Card, { className: "p-6 bg-gradient-to-br from-blue-500 to-blue-700 text-white relative overflow-hidden" },
-                                React.createElement(Activity, { size: 100, className: "absolute -right-4 -bottom-4 text-white/10 rotate-90" }),
                                 React.createElement("h3", { className: "text-blue-100 font-medium mb-1" }, "Total Ecografías"),
                                 React.createElement("div", { className: "text-5xl font-bold mb-4" }, stats.echoTotal),
                                 React.createElement("div", { className: "grid grid-cols-2 text-sm bg-white/10 p-3 rounded-lg backdrop-blur-sm" }, 
