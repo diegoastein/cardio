@@ -32,7 +32,7 @@
         import { 
             Heart, Activity, FileText, Search, Plus, Download, Trash2, Edit, Share2, 
             X, Calendar, ClipboardList, ChevronDown, Wifi, WifiOff, RefreshCw, 
-            Loader2, AlertTriangle, Settings, CheckCircle, Info, Save, Database, Edit2, Check
+            Loader2, AlertTriangle, Settings, CheckCircle, Info, Save, Database, Edit2, Check, BarChart2, PieChart
         } from 'lucide-react';
         
         import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
@@ -290,7 +290,7 @@
                 }
             };
 
-            // DIAGNÓSTICOS (Nueva lógica)
+            // DIAGNÓSTICOS
             const addCustomDiagnosis = (diag) => {
                 if (diag && !diagnosesOptions.includes(diag)) {
                     saveSettings([...diagnosesOptions, diag], null);
@@ -313,12 +313,10 @@
                 }
             };
 
-            // Ordenar diagnósticos alfabéticamente
             const sortedDiagnoses = useMemo(() => {
                 return [...diagnosesOptions].sort((a, b) => a.localeCompare(b));
             }, [diagnosesOptions]);
 
-            // Filtrar diagnósticos para el menú inteligente
             const filteredDiagnoses = useMemo(() => {
                 const term = diagSearch.toLowerCase();
                 return sortedDiagnoses.filter(d => d.toLowerCase().includes(term));
@@ -354,7 +352,6 @@
                 } catch (e) { showToast("Error al borrar", 'error'); }
             };
 
-            // *** CORRECCIÓN APLICADA AQUÍ ***
             const filtered = useMemo(() => {
                 if (!searchTerm && !dateFilterStart && !dateFilterEnd) return [];
                 const term = searchTerm.toLowerCase();
@@ -366,17 +363,55 @@
                 });
             }, [patients, searchTerm, dateFilterStart, dateFilterEnd]);
 
+            // --- ESTADÍSTICAS AVANZADAS ---
             const stats = useMemo(() => {
                 const monthData = patients.filter(p => p && p.fecha && p.fecha.startsWith(statsMonth));
+                
+                // Contadores Básicos
                 let ecgAmb=0, ecgInt=0, echoAmb=0, echoInt=0;
+                
+                // Contadores Detallados
+                const diagCounts = {};
+                const studyCounts = {};
+
                 monthData.forEach(p => {
                     const isAmb = p.tipoPaciente === 'Ambulatorio';
+                    
+                    // Conteo General para Tarjetas Grandes
                     if (p.estudios.includes('ECG')) isAmb ? ecgAmb++ : ecgInt++;
                     if (p.estudios.some(s => s !== 'ECG')) isAmb ? echoAmb++ : echoInt++;
+
+                    // Conteo Detallado de Estudios
+                    p.estudios.forEach(s => {
+                        studyCounts[s] = (studyCounts[s] || 0) + 1;
+                    });
+
+                    // Conteo Detallado de Diagnósticos
+                    p.diagnosticos.forEach(d => {
+                        diagCounts[d] = (diagCounts[d] || 0) + 1;
+                    });
                 });
+
+                // Top 5 Diagnósticos
+                const topDiags = Object.entries(diagCounts)
+                    .sort((a, b) => b[1] - a[1])
+                    .slice(0, 5);
+
+                // Lista de Estudios (Todos)
+                const studyBreakdown = Object.entries(studyCounts)
+                    .sort((a, b) => b[1] - a[1]);
+
                 const [y, m] = statsMonth.split('-');
                 const label = new Date(parseInt(y), parseInt(m)-1, 2).toLocaleString('es-AR', { month: 'long', year: 'numeric' });
-                return { ecgTotal: ecgAmb+ecgInt, ecgAmb, ecgInt, echoTotal: echoAmb+echoInt, echoAmb, echoInt, total: monthData.length, label };
+                
+                return { 
+                    ecgTotal: ecgAmb+ecgInt, ecgAmb, ecgInt, 
+                    echoTotal: echoAmb+echoInt, echoAmb, echoInt, 
+                    total: monthData.length, 
+                    label,
+                    topDiags,
+                    studyBreakdown
+                };
             }, [patients, statsMonth]);
 
             const handleSharePatient = (p) => {
@@ -384,7 +419,17 @@
                 const text = `Consulta Cardiológica\nPaciente: ${p.nombre}\nEdad: ${edadStr}\nFecha: ${new Date(p.fecha).toLocaleDateString('es-AR')}\nTipo: ${p.tipoPaciente}\nEstudios: ${p.estudios.join(', ')}\nDiagnóstico: ${p.diagnosticos.join(', ')}\nNotas: ${p.notas || '-'}`;
                 shareText(text);
             };
-            const handleShareStats = () => shareText(`Estadísticas ${stats.label}\n\nECG Total: ${stats.ecgTotal}\n - Ambulatorio: ${stats.ecgAmb}\n - Internado: ${stats.ecgInt}\n\nEcografías Total: ${stats.echoTotal}\n - Ambulatorio: ${stats.echoAmb}\n - Internado: ${stats.echoInt}\n\nTotal Pacientes: ${stats.total}`);
+            
+            const handleShareStats = () => {
+                const topDiagsText = stats.topDiags.map(d => ` - ${d[0]}: ${d[1]}`).join('\n');
+                const text = `Estadísticas ${stats.label}\n\n` +
+                             `ECG TOTAL: ${stats.ecgTotal} (Amb: ${stats.ecgAmb}, Int: ${stats.ecgInt})\n` +
+                             `ECOS TOTAL: ${stats.echoTotal} (Amb: ${stats.echoAmb}, Int: ${stats.echoInt})\n` +
+                             `Total Pacientes: ${stats.total}\n\n` +
+                             `Top Diagnósticos:\n${topDiagsText}`;
+                shareText(text);
+            };
+
             const shareText = async (text) => {
                 try { if (navigator.share) { await navigator.share({ title: 'Cardio', text }); return true; } await navigator.clipboard.writeText(text); showToast("Copiado"); } catch (e) {}
             };
@@ -474,9 +519,7 @@
                                             }),
                                             React.createElement("div", { className: "absolute right-3 top-3 text-gray-400 pointer-events-none" }, diagSearch ? React.createElement(Search, {size: 16}) : React.createElement(ChevronDown, {size: 16}))
                                         ),
-                                        // Dropdown Inteligente
                                         isDiagDropdownOpen && React.createElement("div", { className: "absolute z-30 w-full bg-white border border-gray-200 rounded-lg shadow-lg mt-1 max-h-60 overflow-y-auto scroller" },
-                                            // Lista Filtrada
                                             filteredDiagnoses.map(d => 
                                                 React.createElement("div", { key: d, className: "flex justify-between items-center px-3 py-2 hover:bg-gray-50 group" },
                                                     React.createElement("span", { 
@@ -486,17 +529,14 @@
                                                                 setFormData(p => ({...p, diagnosticos: [...p.diagnosticos, d]}));
                                                             }
                                                             setDiagSearch(''); 
-                                                            // Mantener abierto para multi-selección o cerrar? "Selección debe ser múltiple" -> mejor mantener y limpiar search
                                                         }
                                                     }, d, formData.diagnosticos.includes(d) && React.createElement(Check, {size: 14, className: "inline ml-2"})),
-                                                    // Acciones en el item
                                                     React.createElement("div", { className: "flex gap-1" },
                                                         React.createElement("button", { type: "button", onClick: (e) => {e.stopPropagation(); editCustomDiagnosis(d);}, className: "p-1 text-gray-400 hover:text-blue-500" }, React.createElement(Edit2, {size: 14})),
                                                         React.createElement("button", { type: "button", onClick: (e) => {e.stopPropagation(); removeCustomDiagnosis(d);}, className: "p-1 text-gray-400 hover:text-red-500" }, React.createElement(Trash2, {size: 14}))
                                                     )
                                                 )
                                             ),
-                                            // Opción Crear
                                             diagSearch && !filteredDiagnoses.includes(diagSearch) && (
                                                 React.createElement("button", { 
                                                     type: "button", 
@@ -506,7 +546,6 @@
                                             )
                                         )
                                     ),
-                                    // Chips seleccionados
                                     React.createElement("div", { className: "flex flex-wrap gap-2 mb-2" }, formData.diagnosticos.map(d => React.createElement("span", { key: d, className: "bg-blue-50 text-blue-700 px-3 py-1 rounded-full text-sm border border-blue-100 flex items-center gap-1" }, d, React.createElement("button", { type: "button", onClick: () => setFormData(p => ({...p, diagnosticos: p.diagnosticos.filter(x => x!==d)})) }, React.createElement(X, { size: 14 }))))),
                                 ),
 
@@ -518,7 +557,7 @@
                     activeTab === 'informes' && React.createElement("div", { className: "flex flex-col gap-4" },
                         React.createElement(Card, { className: "p-4 sticky top-0 z-10" },
                             React.createElement("div", { className: "flex flex-col md:flex-row gap-4 justify-between" },
-                                React.createElement("div", { className: "relative flex-1" }, React.createElement(Search, { className: "absolute left-3 top-2.5 text-gray-400", size: 18 }), React.createElement("input", { type: "text", placeholder: "Buscar...", className: "w-full pl-10 p-2 border rounded-lg outline-none focus:ring-2 focus:ring-teal-500", value: searchTerm, onChange: e => setSearchTerm(e.target.value) })),
+                                React.createElement("div", { className: "relative flex-1" }, React.createElement(Search, { className: "absolute left-3 top-2.5 text-gray-400", size: 18 }), React.createElement("input", { type: "text", placeholder: "Buscar por nombre, diagnóstico o notas...", className: "w-full pl-10 p-2 border rounded-lg outline-none focus:ring-2 focus:ring-teal-500", value: searchTerm, onChange: e => setSearchTerm(e.target.value) })),
                                 React.createElement("div", { className: "flex gap-2 items-center" }, React.createElement("input", { type: "date", className: "p-2 border rounded-lg text-sm", value: dateFilterStart, onChange: e => setDateFilterStart(e.target.value) }), React.createElement("span", { className: "text-gray-400" }, "→"), React.createElement("input", { type: "date", className: "p-2 border rounded-lg text-sm", value: dateFilterEnd, onChange: e => setDateFilterEnd(e.target.value) }))
                             ),
                             React.createElement(Button, { variant: "outline", className: "mt-4 w-full md:w-auto", onClick: () => {
@@ -541,7 +580,6 @@
                                         React.createElement("span", { className: "font-bold text-gray-900" }, p.nombre),
                                         React.createElement("span", { className: "text-xs text-gray-500" }, new Date(p.fecha).toLocaleDateString('es-AR'))
                                     ),
-                                    // MOSTRAR EDAD CON UNIDAD
                                     React.createElement("div", { className: "text-sm text-gray-600" }, `${p.edad} ${p.edadUnidad || 'Años'} • ${p.tipoPaciente}`),
                                     React.createElement("div", { className: "mt-2 flex flex-wrap gap-1" }, p.estudios.map(s => React.createElement("span", { key: s, className: "text-xs bg-teal-50 text-teal-700 px-2 py-0.5 rounded border border-teal-100" }, s))),
                                     React.createElement("div", { className: "mt-1 flex flex-wrap gap-1" }, p.diagnosticos.map(d => React.createElement("span", { key: d, className: "text-xs bg-blue-50 text-blue-700 px-2 py-0.5 rounded border border-blue-100" }, d)))
@@ -565,7 +603,10 @@
                             ),
                             React.createElement(Button, { variant: "outline", onClick: handleShareStats, className: "w-full sm:w-auto" }, React.createElement(Share2, { size: 18 }), "Compartir Resumen")
                         ),
+                        
+                        // DASHBOARD EXPANDIDO
                         React.createElement("div", { className: "grid md:grid-cols-2 gap-4" },
+                            // TOTALES ECG
                             React.createElement(Card, { className: "p-6 bg-gradient-to-br from-teal-500 to-teal-700 text-white relative overflow-hidden" },
                                 React.createElement("h3", { className: "text-teal-100 font-medium mb-1" }, "Total ECGs"),
                                 React.createElement("div", { className: "text-5xl font-bold mb-4" }, stats.ecgTotal),
@@ -574,6 +615,7 @@
                                     React.createElement("div", { className: "border-l border-white/20 pl-3" }, React.createElement("span", { className: "block text-teal-200 text-xs" }, "Internado"), React.createElement("strong", { className: "text-lg" }, stats.ecgInt))
                                 )
                             ),
+                            // TOTALES ECOGRAFÍAS
                             React.createElement(Card, { className: "p-6 bg-gradient-to-br from-blue-500 to-blue-700 text-white relative overflow-hidden" },
                                 React.createElement("h3", { className: "text-blue-100 font-medium mb-1" }, "Total Ecografías"),
                                 React.createElement("div", { className: "text-5xl font-bold mb-4" }, stats.echoTotal),
@@ -581,6 +623,42 @@
                                     React.createElement("div", null, React.createElement("span", { className: "block text-blue-200 text-xs" }, "Ambulatorio"), React.createElement("strong", { className: "text-lg" }, stats.echoAmb)), 
                                     React.createElement("div", { className: "border-l border-white/20 pl-3" }, React.createElement("span", { className: "block text-blue-200 text-xs" }, "Internado"), React.createElement("strong", { className: "text-lg" }, stats.echoInt))
                                 )
+                            )
+                        ),
+
+                        // NUEVAS SECCIONES DETALLADAS
+                        React.createElement("div", { className: "grid md:grid-cols-2 gap-4 mt-2" },
+                            // TOP DIAGNÓSTICOS
+                            React.createElement(Card, { className: "p-5" },
+                                React.createElement("h3", { className: "text-lg font-bold text-gray-800 mb-4 flex items-center gap-2" }, 
+                                    React.createElement(Activity, { size: 20, className: "text-teal-600" }), "Top Diagnósticos"
+                                ),
+                                stats.topDiags.length > 0 ? React.createElement("div", { className: "space-y-3" },
+                                    stats.topDiags.map(([name, count], i) => 
+                                        React.createElement("div", { key: name, className: "flex justify-between items-center text-sm" },
+                                            React.createElement("div", { className: "flex items-center gap-2" },
+                                                React.createElement("span", { className: `w-6 h-6 flex items-center justify-center rounded-full text-xs font-bold ${i===0 ? 'bg-yellow-100 text-yellow-700' : 'bg-gray-100 text-gray-600'}` }, i+1),
+                                                React.createElement("span", { className: "font-medium text-gray-700" }, name)
+                                            ),
+                                            React.createElement("span", { className: "bg-teal-50 text-teal-700 px-2 py-0.5 rounded-full font-bold text-xs" }, count)
+                                        )
+                                    )
+                                ) : React.createElement("p", { className: "text-gray-400 text-sm italic" }, "Sin datos suficientes")
+                            ),
+
+                            // DETALLE POR TIPO DE ESTUDIO
+                            React.createElement(Card, { className: "p-5" },
+                                React.createElement("h3", { className: "text-lg font-bold text-gray-800 mb-4 flex items-center gap-2" }, 
+                                    React.createElement(FileText, { size: 20, className: "text-blue-600" }), "Detalle por Estudio"
+                                ),
+                                stats.studyBreakdown.length > 0 ? React.createElement("div", { className: "space-y-3" },
+                                    stats.studyBreakdown.map(([name, count]) => 
+                                        React.createElement("div", { key: name, className: "flex justify-between items-center text-sm border-b border-gray-50 pb-2 last:border-0" },
+                                            React.createElement("span", { className: "text-gray-600" }, name),
+                                            React.createElement("span", { className: "bg-blue-50 text-blue-700 px-2 py-0.5 rounded-full font-bold text-xs" }, count)
+                                        )
+                                    )
+                                ) : React.createElement("p", { className: "text-gray-400 text-sm italic" }, "Sin datos suficientes")
                             )
                         )
                     )
@@ -596,4 +674,4 @@
         );
     </script>
 </body>
-</html>```
+</html>
