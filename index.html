@@ -29,7 +29,7 @@
         import { 
             Heart, Activity, FileText, Search, Plus, Download, Trash2, Edit, Share2, 
             X, Calendar, ClipboardList, ChevronDown, Wifi, WifiOff, RefreshCw, 
-            Loader2, AlertTriangle, Settings, CheckCircle, Info, Save
+            Loader2, AlertTriangle, Settings, CheckCircle, Info, Save, Database
         } from 'lucide-react';
         
         import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
@@ -49,7 +49,6 @@
         };
         // ==========================================
 
-        // Verificación Segura de Configuración
         let isConfigured = false;
         try {
             isConfigured = firebaseConfig && firebaseConfig.apiKey && !firebaseConfig.apiKey.includes("TU_API_KEY_AQUI");
@@ -70,7 +69,6 @@
             }
         }
 
-        // --- Error Boundary Mejorado para Diagnóstico ---
         class ErrorBoundary extends Component {
             constructor(props) {
                 super(props);
@@ -78,7 +76,6 @@
             }
             static getDerivedStateFromError(error) { return { hasError: true, error }; }
             componentDidCatch(error, errorInfo) { this.setState({ errorInfo }); }
-            
             render() {
                 if (this.state.hasError) {
                     return React.createElement("div", { className: "min-h-screen flex items-center justify-center bg-gray-100 p-4" },
@@ -91,7 +88,6 @@
                                     this.state.error && this.state.error.toString()
                                 )
                             ),
-                            React.createElement("p", { className: "text-gray-600 mb-6 text-sm" }, "Intenta borrar los datos locales. Si el problema persiste, verifica la consola (F12) o comparte el error de arriba."),
                             React.createElement("button", { 
                                 onClick: () => { localStorage.clear(); window.location.reload(); },
                                 className: "w-full bg-red-600 text-white px-4 py-3 rounded-lg hover:bg-red-700 font-medium transition-colors"
@@ -103,7 +99,6 @@
             }
         }
 
-        // --- Componentes UI ---
         const Card = ({ children, className = "" }) => React.createElement("div", { className: `bg-white rounded-xl shadow-md border border-gray-100 overflow-hidden ${className}` }, children);
         
         const Button = ({ children, onClick, variant = "primary", className = "", type = "button", disabled = false }) => {
@@ -121,7 +116,7 @@
         const Toast = ({ message, type = 'success', onClose }) => {
             const bgClass = type === 'error' ? 'bg-red-600' : 'bg-teal-600';
             useEffect(() => { const timer = setTimeout(onClose, 2000); return () => clearTimeout(timer); }, [onClose]);
-            return React.createElement("div", { className: `fixed top-4 right-4 ${bgClass} text-white px-6 py-4 rounded-lg shadow-xl z-50 flex items-center gap-3 toast-enter` },
+            return React.createElement("div", { className: `fixed top-4 right-4 ${bgClass} text-white px-6 py-4 rounded-lg shadow-xl z-50 flex items-center gap-3 toast-enter z-50` },
                 React.createElement(type === 'error' ? AlertTriangle : CheckCircle, { size: 24 }),
                 React.createElement("span", { className: "font-medium" }, message),
                 React.createElement("button", { onClick: onClose, className: "ml-2 hover:bg-white/20 rounded-full p-1 transition-colors" }, React.createElement(X, { size: 18 }))
@@ -139,13 +134,11 @@
             )
         );
 
-        // --- App Principal ---
         function CardioApp() {
             if (!isConfigured) return React.createElement(ConfigScreen);
 
             const [user, setUser] = useState(null);
             const [activeTab, setActiveTab] = useState('registro');
-            
             const [patients, setPatients] = useState([]);
             const [diagnosesOptions, setDiagnosesOptions] = useState(['CIA', 'CIV', 'DAP', 'Insuficiencia Cardíaca', 'Estenosis Aórtica', 'Miocardiopatía']);
             const [studiesOptions, setStudiesOptions] = useState(['Ecocardiograma', 'Ecocardiograma Doppler', 'ECG']);
@@ -153,6 +146,8 @@
             const [isOnline, setIsOnline] = useState(navigator.onLine);
             const [isSyncing, setIsSyncing] = useState(false);
             const [pendingSyncs, setPendingSyncs] = useState([]);
+            const [syncError, setSyncError] = useState(null); // Nuevo estado para errores de sync
+            
             const [notification, setNotification] = useState(null);
             const [isSubmitting, setIsSubmitting] = useState(false);
             
@@ -176,7 +171,6 @@
                 window.addEventListener('online', handleOnline);
                 window.addEventListener('offline', handleOffline);
 
-                // Función segura para cargar JSON
                 const safeLoad = (key, setter, fallback) => {
                     try {
                         const saved = localStorage.getItem(key);
@@ -184,9 +178,7 @@
                             const parsed = JSON.parse(saved);
                             if (Array.isArray(parsed)) setter(parsed);
                         }
-                    } catch (e) {
-                        console.error(`Error cargando ${key}:`, e);
-                    }
+                    } catch (e) { console.error(`Error cargando ${key}:`, e); }
                 };
 
                 safeLoad('cardio_patients', setPatients, []);
@@ -219,7 +211,6 @@
             useEffect(() => {
                 if (!user || !db) return;
                 
-                // RUTAS CORREGIDAS
                 const rootCollection = 'data_compartida';
                 const workspaceDoc = 'cardiologia';
                 
@@ -229,9 +220,13 @@
                     if (pendingSyncs.length === 0) {
                         setPatients(snap.docs.map(d => ({ id: d.id, ...d.data() })));
                     }
-                }, err => console.log("Offline/Error:", err));
+                }, err => {
+                    console.log("Error Snapshot:", err);
+                    if (err.code === 'permission-denied') {
+                        setSyncError("Permiso denegado: Revisa las Reglas de Seguridad en Firebase Console.");
+                    }
+                });
 
-                // Configuración ahora está en una ruta válida de 4 segmentos
                 const settingsRef = doc(db, rootCollection, workspaceDoc, 'configuracion', 'general');
                 const unsubSettings = onSnapshot(settingsRef, (docSnap) => {
                     if (docSnap.exists()) {
@@ -239,7 +234,7 @@
                         if (data.diagnosticos && Array.isArray(data.diagnosticos)) setDiagnosesOptions(data.diagnosticos);
                         if (data.estudios && Array.isArray(data.estudios)) setStudiesOptions(data.estudios);
                     }
-                }, err => console.log("Config offline"));
+                }, err => console.log("Config offline (ignorable)"));
 
                 return () => { unsubPatients(); unsubSettings(); };
             }, [user, pendingSyncs.length]);
@@ -249,8 +244,9 @@
                 const process = async () => {
                     if (!isOnline || !user || pendingSyncs.length === 0 || isSyncing) return;
                     setIsSyncing(true);
-                    const item = pendingSyncs[0];
+                    setSyncError(null); // Limpiar error previo al reintentar
                     
+                    const item = pendingSyncs[0];
                     const rootCollection = 'data_compartida';
                     const workspaceDoc = 'cardiologia';
 
@@ -260,21 +256,32 @@
                         } else if (item.type === 'delete_patient') {
                             await deleteDoc(doc(db, rootCollection, workspaceDoc, 'pacientes', item.id));
                         } else if (item.type === 'save_settings') {
-                            // Guardar en la nueva ruta válida
                             await setDoc(doc(db, rootCollection, workspaceDoc, 'configuracion', 'general'), { 
                                 diagnosticos: item.diagnoses || diagnosesOptions, 
                                 estudios: item.studies || studiesOptions
                             }, { merge: true });
                         }
                         setPendingSyncs(p => p.slice(1));
-                    } catch (e) { console.error("Sync Error", e); } 
+                    } catch (e) { 
+                        console.error("Sync Error", e); 
+                        let msg = e.message;
+                        if (e.code === 'permission-denied') msg = "Permiso denegado en Firestore. Habilita las reglas de escritura.";
+                        setSyncError(msg);
+                    } 
                     finally { setIsSyncing(false); }
                 };
                 const int = setInterval(process, 2000);
                 return () => clearInterval(int);
             }, [isOnline, user, pendingSyncs, isSyncing]);
 
-            // --- Lógica ---
+            // Helpers
+            const clearSyncQueue = () => {
+                if(confirm("¿Estás seguro? Se descartarán los cambios no guardados en la nube para destrabar la aplicación.")) {
+                    setPendingSyncs([]);
+                    setSyncError(null);
+                }
+            };
+
             const saveSettings = (newDiagnoses, newStudies) => {
                 if (newDiagnoses) setDiagnosesOptions(newDiagnoses);
                 if (newStudies) setStudiesOptions(newStudies);
@@ -344,7 +351,7 @@
                 if (!searchTerm && !dateFilterStart && !dateFilterEnd) return [];
                 const lowerTerm = searchTerm.toLowerCase();
                 return patients.filter(p => {
-                    if (!p) return false; // Protección contra datos corruptos
+                    if (!p) return false; 
                     const nameMatch = (p.nombre || '').toLowerCase().includes(lowerTerm);
                     const diagMatch = (p.diagnosticos || []).some(d => d.toLowerCase().includes(lowerTerm));
                     const notesMatch = (p.notas || '').toLowerCase().includes(lowerTerm);
@@ -388,6 +395,7 @@
             return React.createElement("div", { className: "min-h-screen bg-gray-50 pb-20" },
                 notification && React.createElement(Toast, { message: notification.message, type: notification.type, onClose: () => setNotification(null) }),
                 
+                // Header
                 React.createElement("header", { className: "bg-white shadow-sm border-b sticky top-0 z-20 px-4 h-16 flex items-center justify-between max-w-6xl mx-auto" },
                     React.createElement("div", { className: "flex items-center gap-2 text-teal-700" },
                         React.createElement(Heart, { className: "fill-teal-600", size: 28 }),
@@ -404,6 +412,15 @@
                             React.createElement("button", { key: t.id, onClick: () => setActiveTab(t.id), className: `p-2 rounded-md ${activeTab === t.id ? 'bg-teal-50 text-teal-700' : 'text-gray-500'}` }, React.createElement(t.icon, { size: 22 }))
                         )
                     )
+                ),
+
+                // Error Banner Global
+                syncError && React.createElement("div", { className: "bg-red-100 border-l-4 border-red-500 text-red-700 p-4 m-4 rounded flex justify-between items-center" },
+                    React.createElement("div", null, 
+                        React.createElement("p", { className: "font-bold flex items-center gap-2" }, React.createElement(AlertTriangle, { size: 18 }), "Error de Sincronización"),
+                        React.createElement("p", { className: "text-sm" }, syncError)
+                    ),
+                    React.createElement("button", { onClick: clearSyncQueue, className: "text-sm bg-red-200 hover:bg-red-300 px-3 py-1 rounded text-red-800" }, "Descartar Cambios")
                 ),
 
                 React.createElement("main", { className: "max-w-6xl mx-auto px-4 py-6" },
