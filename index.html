@@ -53,6 +53,13 @@
         // ==========================================
 
         const DEFAULT_STUDIES = ['Ecocardiograma', 'Ecocardiograma Doppler', 'ECG'];
+        
+        // Configuración de Pestañas (Tags/Carteles más visibles)
+        const TABS = [
+            { id: 'registro', label: 'Registro', icon: Plus },
+            { id: 'busquedas', label: 'Búsquedas', icon: Search }, // Renombrado de 'informes' a 'busquedas'
+            { id: 'estadisticas', label: 'Estadísticas', icon: Activity }
+        ];
 
         let isConfigured = false;
         try {
@@ -129,6 +136,27 @@
                 )
             )
         );
+
+        // Componente para una fila de paciente (reutilizable para las 3 últimas y las filtradas)
+        const PatientRow = ({ patient: p, onEdit, onDelete, onShare }) => {
+            return React.createElement("div", { className: "p-4 border-b hover:bg-gray-50 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4" },
+                React.createElement("div", { className: "flex-1" }, 
+                    React.createElement("div", { className: "flex items-baseline gap-2" }, 
+                        React.createElement("span", { className: "font-bold text-gray-900" }, p.nombre),
+                        React.createElement("span", { className: "text-xs text-gray-500" }, new Date(p.fecha).toLocaleDateString('es-AR'))
+                    ),
+                    React.createElement("div", { className: "text-sm text-gray-600" }, `${p.edad} ${p.edadUnidad || 'Años'} • ${p.tipoPaciente}`),
+                    React.createElement("div", { className: "mt-2 flex flex-wrap gap-1" }, (p.estudios||[]).map(s => React.createElement("span", { key: s, className: "text-xs bg-teal-50 text-teal-700 px-2 py-0.5 rounded border border-teal-100" }, s))),
+                    React.createElement("div", { className: "mt-1 flex flex-wrap gap-1" }, (p.diagnosticos||[]).map(d => React.createElement("span", { key: d, className: "text-xs bg-blue-50 text-blue-700 px-2 py-0.5 rounded border border-blue-100" }, d)))
+                ),
+                React.createElement("div", { className: "flex gap-2 self-end sm:self-center" },
+                    React.createElement("button", { title: "Compartir Ficha", onClick: () => onShare(p), className: "p-2 text-blue-600 hover:bg-blue-50 rounded transition-colors" }, React.createElement(Share2, { size: 20 })),
+                    React.createElement("button", { title: "Editar", onClick: () => onEdit(p), className: "p-2 text-gray-600 hover:bg-gray-100 rounded transition-colors" }, React.createElement(Edit, { size: 20 })),
+                    React.createElement("button", { title: "Eliminar", onClick: () => onDelete(p.id), className: "p-2 text-red-500 hover:bg-red-50 rounded transition-colors" }, React.createElement(Trash2, { size: 20 }))
+                )
+            );
+        };
+
 
         function CardioApp() {
             if (!isConfigured) return React.createElement(ConfigScreen);
@@ -343,7 +371,10 @@
             };
 
             const toggleStudy = (s) => setFormData(p => ({...p, estudios: p.estudios.includes(s) ? p.estudios.filter(x => x!==s) : [...p.estudios, s]}));
-            const handleDelete = (id) => {
+            
+            // Reusable handlers
+            const handleEditPatient = (p) => { setFormData(p); setIsEditing(true); setActiveTab('registro'); };
+            const handleDeletePatient = (id) => {
                 if (!window.confirm("¿Eliminar registro?")) return;
                 try {
                     setPatients(prev => prev.filter(p => p.id !== id));
@@ -352,8 +383,25 @@
                 } catch (e) { showToast("Error al borrar", 'error'); }
             };
 
+            const handleSharePatient = (p) => {
+                const edadStr = p.edadUnidad ? `${p.edad} ${p.edadUnidad}` : `${p.edad} Años`;
+                const text = `Consulta Cardiológica\nPaciente: ${p.nombre}\nEdad: ${edadStr}\nFecha: ${new Date(p.fecha).toLocaleDateString('es-AR')}\nTipo: ${p.tipoPaciente}\nEstudios: ${p.estudios.join(', ')}\nDiagnóstico: ${p.diagnosticos.join(', ')}\nNotas: ${p.notas || '-'}`;
+                shareText(text);
+            };
+            
+            // Cálculo de los últimos 3 pacientes
+            const last3Patients = useMemo(() => {
+                // El ID es un timestamp, por lo que ordenamos de forma descendente.
+                return [...patients]
+                    .filter(p => p && p.id)
+                    .sort((a, b) => parseInt(b.id) - parseInt(a.id))
+                    .slice(0, 3);
+            }, [patients]);
+
+
             const filtered = useMemo(() => {
-                if (!searchTerm && !dateFilterStart && !dateFilterEnd) return [];
+                // Si hay término de búsqueda o filtros de fecha, se filtra. Si no, devuelve vacío para mostrar solo los 3 últimos y el buscador.
+                if (!searchTerm && !dateFilterStart && !dateFilterEnd) return []; 
                 const term = searchTerm.toLowerCase();
                 return patients.filter(p => {
                     if (!p) return false; 
@@ -363,7 +411,7 @@
                 });
             }, [patients, searchTerm, dateFilterStart, dateFilterEnd]);
 
-            // --- ESTADÍSTICAS AVANZADAS ---
+            // --- ESTADÍSTICAS AVANZADAS (Mismo código que antes) ---
             const stats = useMemo(() => {
                 const monthData = patients.filter(p => p && p.fecha && p.fecha.startsWith(statsMonth));
                 
@@ -414,12 +462,6 @@
                 };
             }, [patients, statsMonth]);
 
-            const handleSharePatient = (p) => {
-                const edadStr = p.edadUnidad ? `${p.edad} ${p.edadUnidad}` : `${p.edad} Años`;
-                const text = `Consulta Cardiológica\nPaciente: ${p.nombre}\nEdad: ${edadStr}\nFecha: ${new Date(p.fecha).toLocaleDateString('es-AR')}\nTipo: ${p.tipoPaciente}\nEstudios: ${p.estudios.join(', ')}\nDiagnóstico: ${p.diagnosticos.join(', ')}\nNotas: ${p.notas || '-'}`;
-                shareText(text);
-            };
-            
             const handleShareStats = () => {
                 const topDiagsText = stats.topDiags.map(d => ` - ${d[0]}: ${d[1]}`).join('\n');
                 const text = `Estadísticas ${stats.label}\n\n` +
@@ -433,26 +475,45 @@
             const shareText = async (text) => {
                 try { if (navigator.share) { await navigator.share({ title: 'Cardio', text }); return true; } await navigator.clipboard.writeText(text); showToast("Copiado"); } catch (e) {}
             };
+            
+            // Componente de navegación (Carteles visibles)
+            const Navbar = () => (
+                React.createElement("div", { className: "grid grid-cols-3 gap-3" },
+                    TABS.map(t => {
+                        const Icon = t.icon;
+                        const isActive = activeTab === t.id;
+                        return React.createElement("button", { 
+                            key: t.id, 
+                            onClick: () => setActiveTab(t.id), 
+                            className: `p-3 rounded-xl shadow-sm transition-all duration-300 flex flex-col items-center justify-center gap-1.5 text-sm font-semibold border-2 ${isActive ? 'bg-teal-50 text-teal-700 border-teal-500 shadow-lg' : 'bg-white text-gray-500 border-gray-100 hover:bg-gray-50'}` 
+                        }, 
+                            React.createElement(Icon, { size: 24 }),
+                            React.createElement("span", { className: "hidden sm:block" }, t.label)
+                        );
+                    })
+                )
+            );
 
             return React.createElement("div", { className: "min-h-screen bg-gray-50 pb-20", onClick: () => setIsDiagDropdownOpen(false) },
                 notification && React.createElement(Toast, { message: notification.message, type: notification.type, onClose: () => setNotification(null) }),
                 
-                React.createElement("header", { className: "bg-white shadow-sm border-b sticky top-0 z-20 px-4 h-16 flex items-center justify-between max-w-6xl mx-auto" },
-                    React.createElement("div", { className: "flex items-center gap-2 text-teal-700" },
-                        React.createElement(Heart, { className: "fill-teal-600", size: 28 }),
-                        React.createElement("h1", { className: "text-xl font-bold hidden sm:block" }, "Cardiología Pediátrica"),
-                        React.createElement("h1", { className: "text-xl font-bold sm:hidden" }, "Cardio")
-                    ),
-                    React.createElement("div", { className: "flex items-center gap-2" },
-                        React.createElement("div", { className: "flex items-center gap-1 text-xs bg-gray-100 px-2 py-1 rounded-full" },
-                            isSyncing ? React.createElement(RefreshCw, { size: 16, className: "animate-spin text-blue-500" }) :
-                            isOnline ? React.createElement(Wifi, { size: 16, className: "text-green-500" }) : React.createElement(WifiOff, { size: 16, className: "text-red-400" }),
-                            pendingSyncs.length > 0 && React.createElement("span", { className: "bg-orange-500 text-white rounded-full w-4 h-4 flex items-center justify-center ml-1" }, pendingSyncs.length)
+                React.createElement("header", { className: "bg-white shadow-md border-b sticky top-0 z-20 px-4 h-auto pt-4 pb-2 max-w-6xl mx-auto" },
+                    React.createElement("div", { className: "flex items-center justify-between mb-4" },
+                        React.createElement("div", { className: "flex items-center gap-2 text-teal-700" },
+                            React.createElement(Heart, { className: "fill-teal-600", size: 28 }),
+                            React.createElement("h1", { className: "text-xl font-bold hidden sm:block" }, "Cardiología Pediátrica"),
+                            React.createElement("h1", { className: "text-xl font-bold sm:hidden" }, "Cardio")
                         ),
-                        [{id:'registro', icon: ClipboardList}, {id:'informes', icon: FileText}, {id:'estadisticas', icon: Activity}].map(t => 
-                            React.createElement("button", { key: t.id, onClick: () => setActiveTab(t.id), className: `p-2 rounded-md ${activeTab === t.id ? 'bg-teal-50 text-teal-700' : 'text-gray-500'}` }, React.createElement(t.icon, { size: 22 }))
+                        React.createElement("div", { className: "flex items-center gap-2" },
+                            React.createElement("div", { className: "flex items-center gap-1 text-xs bg-gray-100 px-2 py-1 rounded-full" },
+                                isSyncing ? React.createElement(RefreshCw, { size: 16, className: "animate-spin text-blue-500" }) :
+                                isOnline ? React.createElement(Wifi, { size: 16, className: "text-green-500" }) : React.createElement(WifiOff, { size: 16, className: "text-red-400" }),
+                                pendingSyncs.length > 0 && React.createElement("span", { className: "bg-orange-500 text-white rounded-full w-4 h-4 flex items-center justify-center ml-1" }, pendingSyncs.length)
+                            )
                         )
-                    )
+                    ),
+                    // Navbar con carteles
+                    React.createElement(Navbar)
                 ),
 
                 syncError && React.createElement("div", { className: "bg-red-50 border-l-4 border-red-500 p-4 m-4 rounded flex flex-col gap-2 shadow-sm" },
@@ -467,7 +528,7 @@
                     activeTab === 'registro' && React.createElement("div", { className: "max-w-3xl mx-auto" },
                         React.createElement(Card, { className: "p-6" },
                             React.createElement("div", { className: "flex justify-between items-center mb-6" },
-                                React.createElement("h2", { className: "text-xl font-bold text-teal-800 flex items-center gap-2" }, isEditing ? React.createElement(Edit) : React.createElement(Plus), isEditing ? 'Editar' : 'Nuevo Ingreso'),
+                                React.createElement("h2", { className: "text-xl font-bold text-teal-800 flex items-center gap-2" }, isEditing ? React.createElement(Edit) : React.createElement(Plus), isEditing ? 'Editar Paciente' : 'Nuevo Ingreso'),
                                 isEditing && React.createElement(Button, { variant: "ghost", onClick: () => {setIsEditing(false); setFormData(initialFormState);} }, "Cancelar")
                             ),
                             React.createElement("form", { onSubmit: handleSubmit, className: "space-y-5" },
@@ -554,8 +615,27 @@
                             )
                         )
                     ),
-                    activeTab === 'informes' && React.createElement("div", { className: "flex flex-col gap-4" },
+                    // Panel de Búsquedas (antes Informes)
+                    activeTab === 'busquedas' && React.createElement("div", { className: "flex flex-col gap-6" },
+                        
+                        // 1. Últimos 3 Pacientes (Carteles más visibles)
+                        React.createElement("div", { className: "space-y-4" },
+                            React.createElement("h2", { className: "text-lg font-bold text-gray-800 flex items-center gap-2" }, React.createElement(ClipboardList, { size: 20, className: "text-teal-600" }), "Últimos 3 Ingresos"),
+                            last3Patients.length > 0 ? React.createElement(Card, { className: "divide-y divide-gray-100" },
+                                last3Patients.map(p => React.createElement(PatientRow, { 
+                                    key: p.id, 
+                                    patient: p, 
+                                    onEdit: handleEditPatient, 
+                                    onDelete: handleDeletePatient, 
+                                    onShare: handleSharePatient 
+                                }))
+                            ) : React.createElement("p", { className: "text-gray-500 text-sm p-4 bg-white rounded-xl shadow-sm border" }, "Aún no hay suficientes pacientes registrados para mostrar los últimos 3.")
+                        ),
+
+
+                        // 2. Buscador y Filtros
                         React.createElement(Card, { className: "p-4 sticky top-0 z-10" },
+                            React.createElement("h2", { className: "text-lg font-bold text-gray-800 mb-4 flex items-center gap-2" }, React.createElement(Search, { size: 20, className: "text-teal-600" }), "Buscador Avanzado"),
                             React.createElement("div", { className: "flex flex-col md:flex-row gap-4 justify-between" },
                                 React.createElement("div", { className: "relative flex-1" }, React.createElement(Search, { className: "absolute left-3 top-2.5 text-gray-400", size: 18 }), React.createElement("input", { type: "text", placeholder: "Buscar por nombre, diagnóstico o notas...", className: "w-full pl-10 p-2 border rounded-lg outline-none focus:ring-2 focus:ring-teal-500", value: searchTerm, onChange: e => setSearchTerm(e.target.value) })),
                                 React.createElement("div", { className: "flex gap-2 items-center" }, React.createElement("input", { type: "date", className: "p-2 border rounded-lg text-sm", value: dateFilterStart, onChange: e => setDateFilterStart(e.target.value) }), React.createElement("span", { className: "text-gray-400" }, "→"), React.createElement("input", { type: "date", className: "p-2 border rounded-lg text-sm", value: dateFilterEnd, onChange: e => setDateFilterEnd(e.target.value) }))
@@ -572,24 +652,17 @@
                                 link.click();
                             }}, React.createElement(Download, { size: 18 }), "Exportar Resultados")
                         ),
+
+                        // 3. Resultados de la Búsqueda
                         React.createElement("div", { className: "bg-white rounded-xl shadow-sm border overflow-hidden" },
-                            filtered.length === 0 ? React.createElement("div", { className: "p-12 text-center text-gray-500 flex flex-col items-center" }, React.createElement(Search, {size: 48, className: "mb-2 text-gray-300"}), "No se encontraron registros.") :
-                            filtered.map(p => React.createElement("div", { key: p.id, className: "p-4 border-b hover:bg-gray-50 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4" },
-                                React.createElement("div", { className: "flex-1" }, 
-                                    React.createElement("div", { className: "flex items-baseline gap-2" }, 
-                                        React.createElement("span", { className: "font-bold text-gray-900" }, p.nombre),
-                                        React.createElement("span", { className: "text-xs text-gray-500" }, new Date(p.fecha).toLocaleDateString('es-AR'))
-                                    ),
-                                    React.createElement("div", { className: "text-sm text-gray-600" }, `${p.edad} ${p.edadUnidad || 'Años'} • ${p.tipoPaciente}`),
-                                    React.createElement("div", { className: "mt-2 flex flex-wrap gap-1" }, p.estudios.map(s => React.createElement("span", { key: s, className: "text-xs bg-teal-50 text-teal-700 px-2 py-0.5 rounded border border-teal-100" }, s))),
-                                    React.createElement("div", { className: "mt-1 flex flex-wrap gap-1" }, p.diagnosticos.map(d => React.createElement("span", { key: d, className: "text-xs bg-blue-50 text-blue-700 px-2 py-0.5 rounded border border-blue-100" }, d)))
-                                ),
-                                React.createElement("div", { className: "flex gap-2 self-end sm:self-center" },
-                                    React.createElement("button", { title: "Compartir Ficha", onClick: () => handleSharePatient(p), className: "p-2 text-blue-600 hover:bg-blue-50 rounded transition-colors" }, React.createElement(Share2, { size: 20 })),
-                                    React.createElement("button", { title: "Editar", onClick: () => { setFormData(p); setIsEditing(true); setActiveTab('registro'); }, className: "p-2 text-gray-600 hover:bg-gray-100 rounded transition-colors" }, React.createElement(Edit, { size: 20 })),
-                                    React.createElement("button", { title: "Eliminar", onClick: () => handleDelete(p.id), className: "p-2 text-red-500 hover:bg-red-50 rounded transition-colors" }, React.createElement(Trash2, { size: 20 }))
-                                )
-                            ))
+                            filtered.length === 0 ? React.createElement("div", { className: "p-12 text-center text-gray-500 flex flex-col items-center" }, React.createElement(Search, {size: 48, className: "mb-2 text-gray-300"}), "No se encontraron registros que coincidan con la búsqueda.") :
+                            filtered.map(p => React.createElement(PatientRow, { 
+                                key: p.id, 
+                                patient: p, 
+                                onEdit: handleEditPatient, 
+                                onDelete: handleDeletePatient, 
+                                onShare: handleSharePatient 
+                            }))
                         )
                     ),
                     activeTab === 'estadisticas' && React.createElement("div", { className: "space-y-6" },
